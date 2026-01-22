@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+:root {
+  height: 100%;
+}
+@layer base {
+  :root {
+    /* Warm Earthy Theme - Light Mode */
+    --background: 60 23.1% 97.5%;     /* Ivory Light #FAFAF7 */
+    --foreground: 0 0% 9.8%;          /* Slate Dark #191919 */
+
+    --card: 0 0% 100%;               /* White */
+    --card-foreground: 0 0% 9.8%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 9.8%;
+
+    --primary: 15 52.3% 58%;         /* Book Cloth #CC785C */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 50 10.3% 88.6%;     /* Ivory Dark #E5E4DF */
+    --secondary-foreground: 0 0% 9.8%;
+
+    --muted: 50 10.3% 88.6%;         /* Ivory Dark */
+    --muted-foreground: 60 1.5% 39.4%; /* Cloud Dark */
+
+    --accent: 60 14.3% 93.1%;        /* Ivory Medium #F0F0EB */
+    --accent-foreground: 15 52.3% 58%;
+
+    --destructive: 4.8 49.2% 50.6%;  /* Error Red #BF4D43 */
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 50 10.3% 88.6%;        /* Ivory Dark */
+    --input: 50 10.3% 88.6%;
+    --ring: 15 52.3% 58%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    /* Warm Earthy Theme - Dark Mode */
+    --background: 0 0% 9.8%;         /* Slate Dark #191919 */
+    --foreground: 60 23.1% 97.5%;    /* Ivory Light */
+
+    --card: 60 1.3% 14.7%;           /* Slate Medium #262625 */
+    --card-foreground: 60 23.1% 97.5%;
+
+    --popover: 60 1.3% 14.7%;
+    --popover-foreground: 60 23.1% 97.5%;
+
+    --primary: 15 52.3% 58%;         /* Book Cloth */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 60 1.6% 24.7%;      /* Slate Light #40403E */
+    --secondary-foreground: 60 23.1% 97.5%;
+
+    --muted: 60 1.6% 24.7%;          /* Slate Light */
+    --muted-foreground: 60 1.8% 56.1%; /* Cloud Medium */
+
+    --accent: 60 1.6% 24.7%;         /* Slate Light */
+    --accent-foreground: 15 52.3% 58%;
+
+    --destructive: 4.8 49.2% 50.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 60 1.6% 24.7%;         /* Slate Light */
+    --input: 60 1.6% 24.7%;
+    --ring: 15 52.3% 58%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-transparent text-foreground;
+    overflow: hidden;
+  }
+  #root {
+    border-radius: 12px;
+    overflow: hidden;
+    background: transparent;
+    box-shadow: 0 20px 60px -15px rgba(0, 0, 0, 0.5);
+  }
+}

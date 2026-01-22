@@ -1,0 +1,45 @@
+[package]
+name = "anycowork"
+version = "0.1.0"
+description = "AnyCowork Tauri App"
+authors = ["you"]
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "anycowork"
+path = "src/lib.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0.0", features = ["test"] }
+tauri-plugin-shell = "2.0.0"
+tauri-plugin-dialog = "2.0.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+rig-core = "0.6.0" 
+diesel = { version = "2.2.0", features = ["sqlite", "r2d2", "chrono"] }
+diesel_migrations = "2.2.0"
+dotenvy = "0.15"
+uuid = { version = "1.19.0", features = ["serde", "v4"] }
+chrono = { version = "0.4.43", features = ["serde"] }
+dashmap = "6.1.0"
+tokio-stream = "0.1.18"
+teloxide = { version = "0.13", features = ["macros"] }
+log = "0.4"
+env_logger = "0.11"
+async-trait = "0.1"
+futures = "0.3"
+async-openai = "0.23"
+sha2 = "0.10.9"
+walkdir = "2.5.0"
+hex = "0.4.3"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+
+[dev-dependencies]
+tempfile = "3.24.0"

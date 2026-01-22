@@ -1,0 +1,685 @@
+# AnyCowork Architecture
+
+> **Last Updated**: 2026-01-14
+> **Version**: 0.1.0
+
+## Overview
+
+AnyCowork is a distributed, extensible AI collaboration platform designed with a multi-layered architecture that supports:
+
+- **Multi-Provider AI**: Seamless switching between Anthropic, OpenAI, and Gemini
+- **Federation**: ROS2-inspired distributed node system
+- **Extensibility**: Skills (Anthropic Agent Skills, MCP servers, native tools)
+- **Multi-Platform**: Web, mobile, Telegram, WhatsApp
+- **Local-First**: SQLite-based with async ORM
+
+---
+
+## Architecture Layers
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    CLIENT LAYER                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│  │   Web    │  │  Mobile  │  │ Telegram │  │ WhatsApp │   │
+│  │  (Vite)  │  │ (Flutter)│  │   Bot    │  │   Bot    │   │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                           │
+                      WebSocket
+                           │
+┌─────────────────────────────────────────────────────────────┐
+│                   GATEWAY LAYER                              │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │          WebSocket Gateway (Port 18789)              │   │
+│  │  • Connection management                             │   │
+│  │  • Real-time event broadcasting                      │   │
+│  │  • Protocol message routing                          │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                           │
+┌─────────────────────────────────────────────────────────────┐
+│                    API LAYER                                 │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │            FastAPI REST API (Port 8080)              │   │
+│  │  • /api/agents/*  - Agent management                 │   │
+│  │  • /api/tasks/*   - Task management                  │   │
+│  │  • /api/messaging/* - Messaging platforms            │   │
+│  │  • /api/skills/*  - Skills management                │   │
+│  │  • /api/federation/* - Federation nodes              │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                           │
+┌─────────────────────────────────────────────────────────────┐
+│                   SERVICE LAYER                              │
+│  ┌───────────┐  ┌───────────┐  ┌──────────┐  ┌──────────┐ │
+│  │  Agent    │  │ Messaging │  │  Skills  │  │Federation│ │
+│  │ Executor  │  │  Manager  │  │ Registry │  │   Node   │ │
+│  └───────────┘  └───────────┘  └──────────┘  └──────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                           │
+┌─────────────────────────────────────────────────────────────┐
+│                   AI PROVIDER LAYER                          │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │           AI Provider Factory                        │   │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐          │   │
+│  │  │Anthropic │  │  OpenAI  │  │  Gemini  │          │   │
+│  │  │  Client  │  │  Client  │  │  Client  │          │   │
+│  │  └──────────┘  └──────────┘  └──────────┘          │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                           │
+┌─────────────────────────────────────────────────────────────┐
+│                   DATA LAYER                                 │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │         SQLAlchemy ORM + Repositories                │   │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐  │   │
+│  │  │Sessions │ │Messages │ │  Tasks  │ │ Skills  │  │   │
+│  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘  │   │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐  │   │
+│  │  │MessagingConn│GatewayClients│MCPServers│FedNodes│  │   │
+│  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘  │   │
+│  │                                                      │   │
+│  │            SQLite Database (anycowork.db)           │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Core Components
+
+### 1. Gateway Layer
+
+**Purpose**: Real-time bidirectional communication hub
+
+**Implementation**: `server/app/gateway.py`
+
+**Capabilities**:
+- WebSocket server on port 18789
+- Connection registry for all clients
+- Event broadcasting (pub/sub)
+- Protocol message routing
+- Heartbeat/keepalive
+
+**Protocol Messages**:
+```json
+{
+  "type": "session.create",
+  "agent_config": {...}
+}
+
+{
+  "type": "session.message",
+  "session_id": "uuid",
+  "message": {...}
+}
+
+{
+  "type": "event",
+  "event_type": "...",
+  "data": {...}
+}
+```
+
+### 2. Agent System
+
+**Purpose**: Execute AI-powered tasks with tool access
+
+**Implementation**: `server/app/agents/`
+
+**Components**:
+- **Executor** (`executor.py`): Agent execution engine
+- **Session** (`session.py`): Session management
+- **Tools** (`tools.py`): Tool registry and built-in tools
+- **Router** (`router.py`): Multi-agent routing
+
+**Built-in Tools**:
+- `file_read` - Read file contents
+- `file_write` - Write file contents
+- `file_list` - List directory
+- `execute_command` - Run shell command (sandboxed)
+
+**Execution Flow**:
+```
+User Message → Agent Executor → AI Provider (Anthropic/OpenAI/Gemini)
+                    ↓
+              Tool Execution
+                    ↓
+             Response Generation
+                    ↓
+              Update Session History
+```
+
+### 3. Multi-Provider AI System
+
+**Purpose**: Abstract AI provider differences
+
+**Implementation**: `server/app/ai/`
+
+**Components**:
+- **Base** (`base.py`): `BaseAIClient` interface
+- **Anthropic** (`anthropic.py`): Claude integration
+- **OpenAI** (`openai_client.py`): GPT integration
+- **Gemini** (`gemini_client.py`): Gemini integration
+- **Factory** (`factory.py`): Provider instantiation
+
+**Switching Providers**:
+```bash
+# Via environment variable
+export AI__PROVIDER=anthropic  # or openai, gemini
+
+# Via config.yaml
+ai:
+  provider: openai
+```
+
+**Unified Interface**:
+```python
+class BaseAIClient(ABC):
+    async def send_message(
+        messages: List[Dict[str, str]],
+        system: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]
+
+    async def stream_message(...) -> AsyncIterator[Dict[str, Any]]
+```
+
+### 4. Skills System
+
+**Purpose**: Extend agent capabilities
+
+**Implementation**: `server/app/skills/`
+
+**Skill Types**:
+1. **Native Skills**: Python-based tools
+2. **Anthropic Agent Skills**: Cloud-based capabilities
+3. **MCP Servers**: Model Context Protocol integrations
+
+**Components**:
+- **Base** (`base.py`): `BaseSkill` interface
+- **Anthropic Skill** (`anthropic_skill.py`): Anthropic Skills wrapper
+- **Registry** (`registry.py`): Skill management
+
+**Usage**:
+```python
+# Register skill
+registry.register_skill("web-search", skill_instance)
+
+# Execute capability
+result = await registry.execute_skill(
+    "web-search",
+    "search",
+    query="AnyCowork features"
+)
+```
+
+### 5. Federation System
+
+**Purpose**: Distribute AnyCowork across multiple instances
+
+**Implementation**: `server/app/federation/node.py`
+
+**ROS2-Inspired Patterns**:
+
+**Topics (Pub/Sub)**:
+```python
+# Create publisher
+pub = node.create_publisher("agent-updates")
+await pub({"agent_id": "...", "status": "active"})
+
+# Create subscriber
+def handle_update(data):
+    print(f"Agent update: {data}")
+
+node.create_subscriber("agent-updates", handle_update)
+```
+
+**Services (RPC)**:
+```python
+# Provide service
+async def handle_request(params):
+    return {"result": "..."}
+
+node.register_service("get-agent-status", handle_request)
+
+# Call service
+response = await node.call_service("get-agent-status", {"agent_id": "..."})
+```
+
+**Actions (Long-running tasks)**:
+```python
+# Register action
+async def handle_action(goal, feedback_cb, cancel_event):
+    feedback_cb({"progress": 50})
+    return {"success": True}
+
+node.register_action("process-document", handle_action)
+
+# Execute action
+result = await node.execute_action(
+    "process-document",
+    {"doc_id": "..."},
+    feedback_callback=lambda fb: print(fb)
+)
+```
+
+### 6. Messaging Platform Integration
+
+**Purpose**: Connect via Telegram, WhatsApp
+
+**Implementation**: `server/app/messaging/`
+
+**Components**:
+- **Base** (`base.py`): `BaseConnector` interface
+- **Telegram** (`telegram.py`): Telegram bot
+- **WhatsApp** (`whatsapp.py`): WhatsApp bridge
+- **Manager** (`manager.py`): Lifecycle management
+
+**Connector Flow**:
+```
+User Message (Telegram/WhatsApp)
+        ↓
+   Connector receives
+        ↓
+  Create/Get Session
+        ↓
+   Execute via Agent
+        ↓
+   Response via Connector
+```
+
+### 7. ORM and Data Layer
+
+**Purpose**: Persistent storage with clean access
+
+**Implementation**: `server/app/orm/`
+
+**Models**:
+- `Session` - Agent sessions
+- `Message` - Conversation history
+- `Task` - Task management
+- `MessagingConnection` - Platform connections
+- `GatewayClient` - WebSocket clients
+- `Skill` - Skill configurations
+- `MCPServer` - MCP server configs
+- `FederationNode` - Distributed nodes
+
+**Repository Pattern**:
+```python
+# Clean data access
+async with get_session() as db:
+    session = await SessionRepository.create(db, agent_config={})
+    messages = await MessageRepository.list_by_session(db, session.id)
+    await SessionRepository.update_status(db, session.id, "active")
+```
+
+---
+
+## Design Patterns
+
+### Factory Pattern
+**Used in**: AI provider instantiation
+
+```python
+def create_ai_client(provider: Optional[str] = None) -> BaseAIClient:
+    if provider_name == "anthropic":
+        return AnthropicClient(...)
+    elif provider_name == "openai":
+        return OpenAIClient(...)
+```
+
+### Repository Pattern
+**Used in**: Data access layer
+
+```python
+class SessionRepository:
+    @staticmethod
+    async def create(db: AsyncSession, ...) -> Session:
+        # Clean, testable data access
+```
+
+### Observer Pattern
+**Used in**: Event broadcasting, pub/sub
+
+```python
+# Federation topics
+node.create_subscriber("events", callback)
+pub = node.create_publisher("events")
+await pub(event_data)
+```
+
+### Strategy Pattern
+**Used in**: AI provider selection
+
+```python
+# Runtime selection of AI provider
+client = get_ai_client()  # Returns appropriate provider
+```
+
+---
+
+## Data Flow
+
+### User Message Flow
+
+```
+1. User sends message via client (Web/Mobile/Telegram/WhatsApp)
+        ↓
+2. Gateway receives WebSocket message OR Messaging connector receives
+        ↓
+3. Session identified or created
+        ↓
+4. Agent Executor processes message
+        ↓
+5. AI Provider generates response (with tool calls if needed)
+        ↓
+6. Tools executed if requested by AI
+        ↓
+7. Response sent back through same channel
+        ↓
+8. Session history updated in database
+        ↓
+9. Event broadcasted to connected clients
+```
+
+### Skill Execution Flow
+
+```
+1. Agent requests skill capability
+        ↓
+2. Skills Registry routes to appropriate skill type
+        ↓
+3a. Native Skill → Execute Python function
+3b. Anthropic Skill → Call Anthropic Skills API
+3c. MCP Server → Call MCP protocol endpoint
+        ↓
+4. Result returned to agent
+        ↓
+5. Agent incorporates result in response
+```
+
+### Federation Node Discovery
+
+```
+1. Node starts and announces presence
+        ↓
+2. Heartbeat broadcasts to federation network
+        ↓
+3. Other nodes receive heartbeat, update registry
+        ↓
+4. Nodes can now:
+   - Subscribe to topics
+   - Call services
+   - Execute actions
+        ↓
+5. Periodic heartbeat maintains connection
+```
+
+---
+
+## Configuration
+
+### Multi-Level Configuration
+
+1. **Default**: Hardcoded in `config.py`
+2. **YAML**: `~/.anycowork/config.yaml`
+3. **Environment**: `.env` file
+4. **Runtime**: Environment variables
+
+**Priority**: Runtime Env > .env > YAML > Default
+
+### Key Configuration Sections
+
+```yaml
+# Workspace
+workspace:
+  path: ~/.anycowork
+
+# Gateway
+gateway:
+  host: 127.0.0.1
+  port: 18789
+
+# API
+api:
+  host: 127.0.0.1
+  port: 8080
+
+# AI Provider
+ai:
+  provider: anthropic  # anthropic, openai, gemini
+  anthropic_api_key: ${ANTHROPIC_API_KEY}
+  anthropic_model: claude-sonnet-4-5-20250929
+  openai_api_key: ${OPENAI_API_KEY}
+  openai_model: gpt-4o
+  gemini_api_key: ${GEMINI_API_KEY}
+  gemini_model: gemini-2.0-flash-exp
+
+# Messaging
+messaging:
+  telegram:
+    enabled: false
+    bot_token: ${TELEGRAM_BOT_TOKEN}
+  whatsapp:
+    enabled: false
+    bridge_url: http://localhost:3000
+```
+
+---
+
+## Security
+
+### Sandboxing
+
+**Tool Execution**: All file operations restricted to workspace directory
+
+```python
+def _validate_path(self, path: str) -> Path:
+    resolved = Path(path).resolve()
+    if not str(resolved).startswith(str(self.workspace_path)):
+        raise ValueError("Access outside workspace denied")
+    return resolved
+```
+
+### API Key Management
+
+- Keys stored in environment variables
+- Never logged or exposed in responses
+- Filtered from status endpoints
+
+### Input Validation
+
+- Pydantic models for all requests
+- Type checking throughout
+- SQL injection prevention via ORM
+
+---
+
+## Extensibility Points
+
+### Adding AI Providers
+
+1. Implement `BaseAIClient` interface
+2. Register in `factory.py`
+3. Add configuration to `config.py`
+
+### Adding Skills
+
+1. Implement `BaseSkill` interface
+2. Register with `SkillRegistry`
+3. Expose capabilities
+
+### Adding Messaging Platforms
+
+1. Implement `BaseConnector` interface
+2. Register with `MessagingManager`
+3. Add route in `routes/messaging.py`
+
+### Adding Federation Capabilities
+
+1. Create topics for new event types
+2. Register services for new operations
+3. Define actions for long-running tasks
+
+---
+
+## Performance Considerations
+
+### Async Throughout
+
+All I/O operations are async:
+- Database operations (aiosqlite)
+- HTTP requests (httpx)
+- WebSocket communication
+- AI provider calls
+
+### Connection Pooling
+
+- SQLAlchemy connection pool
+- HTTP client connection reuse
+- WebSocket connection registry
+
+### Caching
+
+- Skill registry caching
+- Configuration caching
+- Session state caching
+
+---
+
+## Deployment Architecture
+
+### Desktop Application (PyInstaller)
+
+```
+┌─────────────────────────────────────────┐
+│     PyInstaller Executable              │
+│  ┌───────────────────────────────────┐  │
+│  │   Python Runtime + Dependencies   │  │
+│  │   - FastAPI Backend               │  │
+│  │   - WebSocket Gateway             │  │
+│  │   - Federation Node               │  │
+│  │   - SQLite Database               │  │
+│  └───────────────────────────────────┘  │
+│  ┌───────────────────────────────────┐  │
+│  │   Static Web UI (Bundled)         │  │
+│  │   - React + Vite Build            │  │
+│  │   - Served by FastAPI             │  │
+│  └───────────────────────────────────┘  │
+└─────────────────────────────────────────┘
+         Opens in: Browser or Native Window
+```
+
+**Packaging Details**:
+- **Frontend**: Pre-built React app bundled as static files in Python package
+- **Backend**: PyInstaller-bundled Python runtime with all dependencies
+- **Distribution Methods**:
+  1. **PyPI Package**: `pip install anycowork` (for developers)
+  2. **Standalone Executable**: Single file for Windows (.exe), macOS (.app), Linux (binary)
+  3. **Docker Container**: For server deployments
+- **User Data**: Stored in platform-specific directories (AppData, Library, .local/share)
+
+### Single Instance (Default)
+
+```
+┌─────────────────────────┐
+│    AnyCowork Instance   │
+│  ┌──────────────────┐   │
+│  │   Gateway:18789  │   │
+│  └──────────────────┘   │
+│  ┌──────────────────┐   │
+│  │    API:8080      │   │
+│  └──────────────────┘   │
+│  ┌──────────────────┐   │
+│  │  anycowork.db    │   │
+│  └──────────────────┘   │
+└─────────────────────────┘
+```
+
+### Multi-Instance Federation (Multi-Node)
+
+```
+┌──────────────┐        ┌──────────────┐        ┌──────────────┐
+│ Desktop PC A │◄──────►│ Desktop PC B │◄──────►│ Mobile Device│
+│ Gateway:18789│        │ Gateway:18789│        │ Gateway:18789│
+│ Fed:18790    │        │ Fed:18790    │        │ Fed:18790    │
+└──────────────┘        └──────────────┘        └──────────────┘
+         │                       │                       │
+    ┌────┴────┐             ┌───┴────┐            ┌────┴────┐
+    │ Clients │             │Clients │            │ Clients │
+    └─────────┘             └────────┘            └─────────┘
+```
+
+**Federation Features**:
+- **Shared Sessions**: Access conversations from any connected device
+- **Distributed Tasks**: Offload heavy tasks to more powerful nodes
+- **Real-time Sync**: Changes propagate instantly across all nodes
+- **Offline Support**: Local-first design works without network
+- **Auto-Discovery**: Nodes can discover each other on local network
+- **Secure Communication**: TLS encryption for federation protocol
+
+---
+
+## Technology Stack
+
+### Backend
+- **Framework**: FastAPI 0.104+
+- **WebSocket**: Native FastAPI WebSocket
+- **ORM**: SQLAlchemy 2.0 (async)
+- **Database**: SQLite + aiosqlite
+- **AI SDKs**: anthropic, openai, google-generativeai
+- **Validation**: Pydantic 2.5+
+
+### Frontend
+- **Web**: Vite + React, TypeScript
+- **UI**: Shadcn UI + Tailwind CSS
+- **State**: Zustand
+- **Routing**: React Router
+
+### Desktop
+- **Container**: Electron 28+
+- **Packaging**: electron-builder
+- **Python Bundling**: PyInstaller
+- **Config Storage**: electron-store
+
+### Mobile (Planned)
+- **Framework**: Flutter (Dart)
+- **State**: Riverpod
+- **Messaging**: python-telegram-bot, whatsapp-web.js
+
+---
+
+## Future Enhancements
+
+### Short-term
+- Complete Telegram/WhatsApp connectors
+- Web UI with Anthropic design style
+- Mobile apps (iOS/Android)
+
+### Medium-term
+- Voice I/O (ElevenLabs)
+- Live Canvas visual workspace
+- Advanced federation (service mesh)
+
+### Long-term
+- Plugin marketplace
+- Multi-user support
+- Cloud sync
+- Enterprise features
+
+---
+
+## References
+
+- **Anthropic Agent Skills**: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview
+- **Model Context Protocol**: https://modelcontextprotocol.io/docs/getting-started/intro
+- **ROS2 Concepts**: https://docs.ros.org/en/rolling/Concepts.html
+- **FastAPI**: https://fastapi.tiangolo.com/
+- **SQLAlchemy**: https://docs.sqlalchemy.org/
+
+---
+
+**Last Updated**: 2026-01-14
+**Maintained By**: AnyCowork Development Team

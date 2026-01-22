@@ -1,0 +1,233 @@
+/* AnyCowork Design System - Based on UI Design Guidelines */
+
+@import './landing.css';
+
+:root {
+  /* Warm Neutrals - Beige/Cream Palette */
+  --bg-primary: #F5EFE7;
+  --bg-secondary: #EDE7DF;
+  --bg-tertiary: #E5DDD3;
+  --bg-sidebar: #F5EFE7;
+  --bg-chat: #FDFCFB;
+
+  /* Text Colors */
+  --text-primary: #2C2825;
+  --text-secondary: #6B6560;
+  --text-tertiary: #9C9691;
+  --text-placeholder: #B8B3AE;
+
+  /* Accent - Coral/Salmon */
+  --accent-primary: #D97757;
+  --accent-hover: #C96847;
+  --accent-light: #E89B7F;
+  --accent-subtle: #F5E5DF;
+
+  /* Status Colors */
+  --success: #10B981;
+  --success-bg: #D1FAE5;
+  --warning: #F59E0B;
+  --error: #EF4444;
+  --info: #3B82F6;
+
+  /* Borders */
+  --border-subtle: #E5DDD3;
+  --border-default: #D6CFC5;
+  --border-strong: #B8B3AE;
+}
+
+/* Dark mode colors */
+.dark {
+  --bg-primary: #0C0A09;
+  --bg-secondary: #1C1917;
+  --bg-tertiary: #292524;
+  --bg-chat: #0C0A09;
+
+  --text-primary: #FAFAF9;
+  --text-secondary: #A8A29E;
+  --text-tertiary: #78716C;
+
+  --accent-primary: #F97316;
+  --accent-hover: #FB923C;
+  --accent-subtle: #431407;
+
+  --border-subtle: #292524;
+  --border-default: #44403C;
+  --border-strong: #57534E;
+}
+
+/* Global Styles */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--bg-chat);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.6;
+}
+
+/* Override Nextra defaults with our design system */
+.nextra-nav-container {
+  background-color: var(--bg-primary) !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+}
+
+.nextra-sidebar {
+  background-color: var(--bg-primary) !important;
+  border-right: 1px solid var(--border-subtle) !important;
+}
+
+/* Custom button styles */
+.btn-primary {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  background-color: var(--accent-primary);
+  color: white;
+  border-radius: 0.5rem;
+  text-decoration: none;
+  font-weight: 600;
+  transition: background-color 150ms ease;
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-hover);
+}
+
+.btn-secondary {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  border: 1px solid var(--border-default);
+  background-color: transparent;
+  color: var(--text-primary);
+  border-radius: 0.5rem;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 150ms ease;
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-strong);
+}
+
+/* Feature cards */
+.feature-card {
+  padding: 1.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  background-color: white;
+  transition: box-shadow 200ms ease;
+}
+
+.dark .feature-card {
+  background-color: var(--bg-secondary);
+}
+
+.feature-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.feature-card h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.feature-card p {
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.feature-card svg {
+  flex-shrink: 0;
+}
+
+/* Testimonial/Quote styles */
+.testimonial {
+  margin-top: 2rem;
+  padding: 2rem;
+  background-color: var(--bg-primary);
+  border-radius: 0.5rem;
+  border-left: 4px solid var(--accent-primary);
+}
+
+.testimonial blockquote {
+  font-size: 1.125rem;
+  font-style: italic;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.testimonial footer {
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* Code blocks */
+pre {
+  background-color: var(--bg-secondary) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 0.5rem !important;
+}
+
+code {
+  color: var(--text-primary) !important;
+}
+
+/* Links */
+a {
+  color: var(--accent-primary);
+  transition: color 150ms ease;
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+/* Callouts */
+.nextra-callout {
+  border-radius: 0.5rem !important;
+  border-left-width: 4px !important;
+}
+
+/* Pricing card */
+.pricing-card {
+  padding: 2rem;
+  border: 2px solid var(--accent-primary);
+  border-radius: 1rem;
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+  background-color: white;
+}
+
+.dark .pricing-card {
+  background-color: var(--bg-secondary);
+}
+
+.pricing-card h3 {
+  margin-top: 0;
+}
+
+.pricing-card .price {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+
+.pricing-card ul {
+  list-style: none;
+  padding: 0;
+}
+
+.pricing-card li {
+  padding: 0.5rem 0;
+}

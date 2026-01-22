@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS attachments;
+DROP TABLE IF EXISTS blocks;
+DROP TABLE IF EXISTS pages;

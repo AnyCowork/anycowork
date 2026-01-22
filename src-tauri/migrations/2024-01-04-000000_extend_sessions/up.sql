@@ -1,0 +1,2 @@
+-- This migration is now consolidated into 2024-01-01-000000_create_agents
+-- We leave it empty to keep the version sequence for existing databases.

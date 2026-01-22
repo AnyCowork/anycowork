@@ -1,0 +1,116 @@
+# Documentation
+
+Welcome to the AnyCowork documentation. Here you'll find everything you need to build powerful AI assistants.
+
+## Quick Links
+
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem', marginTop: '2rem' }}>
+  <a href="/docs/getting-started" style={{ 
+    padding: '1.5rem', 
+    border: '1px solid #E5DDD3', 
+    borderRadius: '0.5rem',
+    textDecoration: 'none',
+    display: 'block'
+  }}>
+    <h3 style={{ marginTop: 0, color: '#D97757' }}>🚀 Getting Started</h3>
+    <p style={{ margin: 0, color: '#6B6560' }}>Install and set up AnyCowork in minutes</p>
+  </a>
+
+  <a href="/docs/architecture" style={{ 
+    padding: '1.5rem', 
+    border: '1px solid #E5DDD3', 
+    borderRadius: '0.5rem',
+    textDecoration: 'none',
+    display: 'block'
+  }}>
+    <h3 style={{ marginTop: 0, color: '#D97757' }}>🏗️ Architecture</h3>
+    <p style={{ margin: 0, color: '#6B6560' }}>Understand how AnyCowork works</p>
+  </a>
+
+  <a href="/docs/build" style={{ 
+    padding: '1.5rem', 
+    border: '1px solid #E5DDD3', 
+    borderRadius: '0.5rem',
+    textDecoration: 'none',
+    display: 'block'
+  }}>
+    <h3 style={{ marginTop: 0, color: '#D97757' }}>🔨 Building</h3>
+    <p style={{ margin: 0, color: '#6B6560' }}>Build for different platforms</p>
+  </a>
+
+  <a href="/docs/desktop" style={{ 
+    padding: '1.5rem', 
+    border: '1px solid #E5DDD3', 
+    borderRadius: '0.5rem',
+    textDecoration: 'none',
+    display: 'block'
+  }}>
+    <h3 style={{ marginTop: 0, color: '#D97757' }}>💻 Desktop</h3>
+    <p style={{ margin: 0, color: '#6B6560' }}>Package as desktop application</p>
+  </a>
+</div>
+
+## Installation
+
+### From PyPI
+
+```bash
+pip install anycowork
+anycowork-desktop
+```
+
+### From Source
+
+```bash
+git clone https://github.com/anycowork/anycowork.git
+cd anycowork
+./setup-conda.sh
+```
+
+## Core Concepts
+
+### Agents
+
+Agents are the core of AnyCowork. They process messages, use tools, and maintain conversation history.
+
+```python
+from anycowork import Agent
+
+agent = Agent(
+    provider="anthropic",
+    model="claude-sonnet-4",
+    tools=[search, calculate]
+)
+
+response = await agent.execute("What's 2+2?")
+```
+
+### Tools
+
+Tools extend agent capabilities:
+
+```python
+from anycowork import Tool
+
+@Tool
+def search_web(query: str) -> str:
+    """Search the web"""
+    return search_engine.query(query)
+```
+
+### Federation
+
+Connect multiple AnyCowork instances:
+
+```python
+from anycowork.federation import Node
+
+node = Node(name="desktop")
+node.connect_to("192.168.1.100:18790")
+```
+
+## Need Help?
+
+- **GitHub Issues**: [Report bugs](https://github.com/anycowork/anycowork/issues)
+- **Discord**: [Join the community](https://discord.gg/anycowork)
+- **Discussions**: [Ask questions](https://github.com/anycowork/anycowork/discussions)

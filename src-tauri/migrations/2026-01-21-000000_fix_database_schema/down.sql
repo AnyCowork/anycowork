@@ -1,0 +1,3 @@
+-- Reverting a normalization migration is complex and potentially destructive. 
+-- For simplicity, we just leave it as is or drop the tables if necessary.
+-- In a real scenario, we would recreate the old schema.
