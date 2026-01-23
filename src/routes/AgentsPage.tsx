@@ -515,11 +515,10 @@ You should:
                 <>
                   <SelectItem value="gemini-3-pro-preview">Gemini 3 Pro (Preview) - Most Intelligent</SelectItem>
                   <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash (Preview) - Balanced</SelectItem>
-                  <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash - Stable</SelectItem>
-                  <SelectItem value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite - Ultra Fast</SelectItem>
-                  <SelectItem value="gemini-2.5-pro">Gemini 2.5 Pro - Advanced Thinking</SelectItem>
+                  <SelectItem value="gemini-2.0-flash-exp">Gemini 2.0 Flash Exp (Preview) - Best Performance</SelectItem>
                   <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
-                  <SelectItem value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite</SelectItem>
+                  <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro - Stable</SelectItem>
+                  <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
                 </>
               )}
               {formData.ai_config?.provider === "anthropic" && (

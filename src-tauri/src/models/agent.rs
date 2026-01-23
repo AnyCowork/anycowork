@@ -89,6 +89,19 @@ pub struct AgentDto {
     pub updated_at: i64,
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct AgentUpdateDto {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub status: Option<String>,
+    pub characteristics: Option<AgentCharacteristicsDto>,
+    pub ai_config: Option<AIConfigDto>,
+    pub system_prompt: Option<String>,
+    pub skills: Option<Vec<String>>,
+    pub mcp_servers: Option<Vec<String>>,
+    pub execution_settings: Option<serde_json::Value>,
+}
+
 impl Agent {
     pub fn into_dto(self) -> AgentDto {
         let characteristics = AgentCharacteristicsDto {

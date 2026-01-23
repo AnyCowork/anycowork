@@ -76,6 +76,98 @@ pub async fn get_agents(state: State<'_, AppState>) -> Result<Vec<AgentDto>, Str
     Ok(results.into_iter().map(|a| a.into_dto()).collect())
 }
 
+#[tauri::command]
+pub async fn update_agent(
+    state: State<'_, AppState>,
+    agent_id: String,
+    data: crate::models::AgentUpdateDto,
+) -> Result<AgentDto, String> {
+    use schema::agents::dsl::*;
+
+    let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
+
+    // Fetch existing agent
+    let mut agent = agents
+        .filter(id.eq(&agent_id))
+        .first::<Agent>(&mut conn)
+        .map_err(|_| "Agent not found".to_string())?;
+
+    // Update fields if present
+    if let Some(n) = data.name {
+        agent.name = n;
+    }
+    if let Some(d) = data.description {
+        agent.description = Some(d);
+    }
+    // Status update logic if needed
+    if let Some(s) = data.status {
+        agent.status = s;
+    }
+
+    // Characteristics update
+    if let Some(chars) = data.characteristics {
+        agent.personality = chars.personality;
+        agent.tone = chars.tone;
+        agent.expertise = Some(chars.expertise.join(", "));
+    }
+
+    // AI Config update
+    if let Some(config) = data.ai_config {
+        agent.ai_provider = config.provider.clone(); // Update root fields too
+        agent.ai_model = config.model.clone();
+        agent.ai_temperature = config.temperature;
+        
+        let json_config = serde_json::to_string(&config).map_err(|e| e.to_string())?;
+        agent.ai_config = json_config;
+    }
+
+    if let Some(prompt) = data.system_prompt {
+        agent.system_prompt = Some(prompt);
+    }
+
+    if let Some(s) = data.skills {
+        agent.skills = Some(s.join(", "));
+    }
+
+    if let Some(m) = data.mcp_servers {
+        agent.mcp_servers = Some(m.join(", "));
+    }
+    
+    // Execution Settings
+    if let Some(settings) = data.execution_settings {
+         agent.execution_settings = Some(settings.to_string());
+    }
+
+    agent.updated_at = chrono::Utc::now().timestamp();
+
+    // Save changes
+    // Since we modifying the struct, we can use save_changes if it was Identifiable + AsChangeset
+    // But Struct `Agent` derives Queryable, Selectable. We need to manually update.
+    // Diesel update query:
+    diesel::update(agents.filter(id.eq(&agent_id)))
+        .set((
+            name.eq(&agent.name),
+            description.eq(&agent.description),
+            status.eq(&agent.status),
+            personality.eq(&agent.personality),
+            tone.eq(&agent.tone),
+            expertise.eq(&agent.expertise),
+            ai_provider.eq(&agent.ai_provider),
+            ai_model.eq(&agent.ai_model),
+            ai_temperature.eq(&agent.ai_temperature),
+            ai_config.eq(&agent.ai_config),
+            system_prompt.eq(&agent.system_prompt),
+            skills.eq(&agent.skills),
+            mcp_servers.eq(&agent.mcp_servers),
+            execution_settings.eq(&agent.execution_settings),
+            updated_at.eq(&agent.updated_at),
+        ))
+        .execute(&mut conn)
+        .map_err(|e| e.to_string())?;
+
+    Ok(agent.into_dto())
+}
+
 use tauri::Runtime;
 
 pub async fn chat_internal<R: Runtime>(

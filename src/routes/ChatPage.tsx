@@ -40,18 +40,17 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 
 // Available AI models (✅ = Tested and verified working)
 const AI_MODELS = [
-  // Gemini 3 Series (Latest - Most Intelligent) ✅ All tested
+  // Gemini 3 Series (Latest - Most Intelligent)
   { value: "gemini-3-pro-preview", label: "Gemini 3 Pro ⭐", provider: "gemini" },
   { value: "gemini-3-flash-preview", label: "Gemini 3 Flash", provider: "gemini" },
 
-  // Gemini 2.5 Series (Stable) ✅ All tested
-  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash", provider: "gemini" },
-  { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite", provider: "gemini" },
-  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro", provider: "gemini" },
-
-  // Gemini 2.0 Series ✅ All tested
+  // Gemini 2.0 Series (Latest)
+  { value: "gemini-2.0-flash-exp", label: "Gemini 2.0 Flash Exp ⭐", provider: "gemini" },
   { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash", provider: "gemini" },
-  { value: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash-Lite", provider: "gemini" },
+
+  // Gemini 1.5 Series (Stable)
+  { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro", provider: "gemini" },
+  { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash", provider: "gemini" },
 
   // Claude Models (Opus 4.5 default, Haiku tested ✅)
   { value: "claude-opus-4.5", label: "Claude Opus 4.5 ⭐", provider: "anthropic" },
@@ -610,11 +609,19 @@ export default function ChatPage() {
           // Handle streaming text
           setMessages((prev) => {
             const lastMsg = prev[prev.length - 1];
+
+            // Highlight errors
+            let contentToAdd = payload.content;
+            if (typeof contentToAdd === 'string' && (contentToAdd.startsWith("Error:") || contentToAdd.includes("ProviderError"))) {
+              // Format as a markdown alert for visibility
+              contentToAdd = `\n\n> [!CAUTION]\n> **AI Provider Error**\n> ${contentToAdd}\n\n`;
+            }
+
             if (lastMsg && lastMsg.role === 'assistant' && String(lastMsg.id).startsWith('streaming-')) {
               // Append to existing assistant message
               return [
                 ...prev.slice(0, -1),
-                { ...lastMsg, content: lastMsg.content + payload.content }
+                { ...lastMsg, content: lastMsg.content + contentToAdd }
               ];
             } else {
               // Create new assistant message
@@ -623,7 +630,7 @@ export default function ChatPage() {
                 {
                   id: `streaming-${Date.now()}`,
                   role: 'assistant',
-                  content: payload.content,
+                  content: contentToAdd,
                   timestamp: Date.now(),
                 }
               ];
@@ -1219,6 +1226,24 @@ export default function ChatPage() {
               </Button>
             </div>
           </Tabs>
+
+          <div className="h-6 w-px bg-border mx-1" />
+
+          <Select value={selectedModel} onValueChange={setSelectedModel}>
+            <SelectTrigger className="h-8 w-[180px] text-xs shadow-none border-transparent hover:bg-muted/50 focus:ring-0">
+              <div className="flex items-center gap-2 truncate">
+                <span className="text-muted-foreground">Model:</span>
+                <SelectValue placeholder="Select Model" />
+              </div>
+            </SelectTrigger>
+            <SelectContent align="end">
+              {AI_MODELS.map((model) => (
+                <SelectItem key={model.value} value={model.value} className="text-xs">
+                  {model.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Chat Area */}

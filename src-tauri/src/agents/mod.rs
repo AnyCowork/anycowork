@@ -9,6 +9,8 @@ mod workflow_tests;
 use rig::completion::Prompt;
 use rig::completion::Chat;
 use rig::providers::openai;
+use rig::providers::anthropic;
+use rig::providers::gemini;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio::sync::oneshot;
@@ -36,6 +38,7 @@ pub struct AgentLoop<R: Runtime> {
     pub agent_id: String,
     pub session_id: String,
     pub model: String, 
+    pub provider: String, 
     pub history: Vec<rig::completion::Message>, 
     pub tools: Vec<Box<dyn Tool<R>>>,
     pub snapshot_manager: crate::snapshots::SnapshotManager,
@@ -54,6 +57,7 @@ impl<R: Runtime> AgentLoop<R> {
             agent_id: agent_db.id.clone(),
             session_id: "temp".to_string(), // Set later
             model: agent_db.ai_model.clone(),
+            provider: agent_db.ai_provider.clone(),
             history: vec![],
             tools,
             snapshot_manager: crate::snapshots::SnapshotManager::new(std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))),
@@ -65,11 +69,11 @@ impl<R: Runtime> AgentLoop<R> {
         user_message: String,
         window: tauri::WebviewWindow<R>,
         job_id: String,
-        _pending_approvals: Arc<dashmap::DashMap<String, oneshot::Sender<bool>>>, // Keeping for backward compat logic if needed, but permissions handle approval now
+        _pending_approvals: Arc<dashmap::DashMap<String, oneshot::Sender<bool>>>,
         permission_manager: Arc<PermissionManager>,
         db_pool: DbPool,
     ) {
-        // Initialize job with full fields to match frontend expectation
+        // Initialize job
         let job = ExecutionJob {
             id: job_id.clone(),
             session_id: self.session_id.clone(),
@@ -84,25 +88,10 @@ impl<R: Runtime> AgentLoop<R> {
             job: job.clone(),
         });
 
-        // 1. Add User Message to History (Using rig::completion::Message)
+        // 1. Add User Message to History
         let truncated_user_message = truncate_message_content(&user_message, "user");
         self.history.push(rig::completion::Message { role: "user".to_string(), content: truncated_user_message });
 
-        // Build Rig Agent
-        let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| "".to_string());
-        if api_key.is_empty() {
-             let _ = Emitter::emit(&window, &format!("session:{}", self.session_id), AgentEvent::Token {
-                content: "Error: OPENAI_API_KEY environment variable is not set.".to_string(),
-            });
-             let _ = Emitter::emit(&window, &format!("session:{}", self.session_id), AgentEvent::JobCompleted {
-                job: ExecutionJob { status: "failed".to_string(), ..job },
-                message: "Missing API Key".to_string(),
-            });
-            return;
-        }
-
-        let client = openai::Client::new(&api_key);
-        
         // Prepare tool definitions
         let tools_desc = self.tools.iter().map(|t| {
             json!({
@@ -111,17 +100,69 @@ impl<R: Runtime> AgentLoop<R> {
                 "parameters": t.parameters_schema()
             })
         }).collect::<Vec<_>>();
-        
+
         // Manual prompt injection for tools
         let tools_prompt = format!(
             "You are an intelligent agent with access to the following tools:\n\n{}\n\nRULES:\n1. To use a tool, you MUST output ONLY a valid JSON object matching the 'tool' and 'args' schema.\n2. Example: {{\"tool\": \"filesystem\", \"args\": {{\"operation\": \"list_dir\", \"path\": \".\"}}}}\n3. If a user asks to perform an action available via tools (like listing files), USE THE TOOL. Do NOT describe what you will do, just do it.\n4. Do not apologize or ask for clarification if the request is clear and you have a tool for it.\n5. Output ONLY the JSON for the tool call, no other text.\n6. For multi-step tasks, execute the first step immediately. Do NOT stop until all requested steps are completed.\n7. ONLY if the task is fully completed or you cannot proceed, then output plain text to answer.",
             serde_json::to_string_pretty(&tools_desc).unwrap()
         );
 
-        let agent = client.agent(&self.model)
-            .preamble(&tools_prompt)
-            .build();
+        // Select and Build Agent based on Provider
+        // Dispatching to a common handler or using Box<dyn Chat> would be ideal, 
+        // but Rig agents are typed by their completion model.
+        // We will match and dispatch.
+        
+        match self.provider.as_str() {
+            "openai" => {
+                let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
+                if api_key.is_empty() { self.send_error(&window, "Error: OPENAI_API_KEY not set", &job); return; }
+                let client = openai::Client::new(&api_key);
+                let agent = client.agent(&self.model).preamble(&tools_prompt).build();
+                self.run_loop(agent, &window, &job, permission_manager, &db_pool, user_message).await;
+            }
+            "gemini" => {
+                let api_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
+                if api_key.is_empty() { self.send_error(&window, "Error: GEMINI_API_KEY not set", &job); return; }
+                let client = gemini::Client::new(&api_key);
+                let agent = client.agent(&self.model).preamble(&tools_prompt).build();
+                self.run_loop(agent, &window, &job, permission_manager, &db_pool, user_message).await;
+            }
+             "anthropic" => {
+                let api_key = std::env::var("ANTHROPIC_API_KEY").unwrap_or_default();
+                if api_key.is_empty() { self.send_error(&window, "Error: ANTHROPIC_API_KEY not set", &job); return; }
+                let client = anthropic::Client::new(
+                    &api_key,
+                    "https://api.anthropic.com/v1",
+                    None,
+                    "2023-06-01"
+                );
+                let agent = client.agent(&self.model).preamble(&tools_prompt).build();
+                self.run_loop(agent, &window, &job, permission_manager, &db_pool, user_message).await;
+            }
+            _ => {
+                 self.send_error(&window, &format!("Error: Unsupported provider '{}'", self.provider), &job);
+            }
+        }
+    }
 
+    fn send_error(&self, window: &tauri::WebviewWindow<R>, msg: &str, job: &ExecutionJob) {
+        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Token { content: msg.to_string() });
+        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::JobCompleted {
+            job: ExecutionJob { status: "failed".to_string(), ..job.clone() },
+            message: msg.to_string(),
+        });
+    }
+
+    // Generic run loop using the Chat trait
+    pub async fn run_loop<A: Chat>(
+        &mut self,
+        agent: A, // Generic agent implementing Chat
+        window: &tauri::WebviewWindow<R>,
+        job: &ExecutionJob,
+        permission_manager: Arc<PermissionManager>,
+        db_pool: &DbPool,
+        user_message: String,
+    ) {
         let max_steps = 10;
         let mut steps_count = 0;
         let mut final_response_text = String::new();
@@ -132,7 +173,6 @@ impl<R: Runtime> AgentLoop<R> {
             }
             steps_count += 1;
             
-            // Let's pop the last message to use as the prompt argument.
             let prompt_msg = if let Some(last_msg) = self.history.pop() {
                 last_msg
             } else {
@@ -149,9 +189,9 @@ impl<R: Runtime> AgentLoop<R> {
                 Ok(r) => r.to_string(),
                 Err(e) => {
                     println!("Error: {}", e);
-                     let _ = Emitter::emit(&window, &format!("session:{}", self.session_id), AgentEvent::Token {
-                        content: format!("Error: {}", e),
-                    });
+                        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Token {
+                            content: format!("Error: {}", e),
+                        });
                     break;
                 }
             };
@@ -192,11 +232,11 @@ impl<R: Runtime> AgentLoop<R> {
                                 created_at: chrono::Utc::now().to_rfc3339(),
                             };
 
-                            let _ = Emitter::emit(&window, &format!("session:{}", self.session_id), AgentEvent::StepStarted {
+                             let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepStarted {
                                 job: job.clone(),
                                 step: step.clone(),
                             });
-                             let _ = Emitter::emit(&window, &format!("session:{}", self.session_id), AgentEvent::StepCompleted {
+                             let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepCompleted {
                                 job: job.clone(),
                                 step: step.clone(),
                             });
@@ -223,7 +263,7 @@ impl<R: Runtime> AgentLoop<R> {
                                 requires_approval: false,
                                 created_at: chrono::Utc::now().to_rfc3339(),
                             };
-                             let _ = Emitter::emit(&window, &format!("session:{}", self.session_id), AgentEvent::StepStarted { job: job.clone(), step: step.clone() });
+                             let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepStarted { job: job.clone(), step: step.clone() });
                              
                              // Add failure to history and DB
                              let fail_msg_full = format!("Tool '{}' validation failed: {}", tool_name, fail_msg);
@@ -247,12 +287,12 @@ impl<R: Runtime> AgentLoop<R> {
                         };
 
                         // 2. Execution
-                        let _ = Emitter::emit(&window, &format!("session:{}", self.session_id), AgentEvent::StepStarted {
+                        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepStarted {
                             job: job.clone(),
                             step: step.clone(),
                         });
 
-                        let _ = Emitter::emit(&window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
+                        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
                             message: format!("Executing {}...", tool_name),
                         });
                         
@@ -273,7 +313,7 @@ impl<R: Runtime> AgentLoop<R> {
                                 let diff = self.snapshot_manager.diff(&pre, &post);
                                 if !diff.new_files.is_empty() || !diff.modified_files.is_empty() || !diff.deleted_files.is_empty() {
                                      let diff_msg = format!("Workspace Changes: +{:?} *{:?} -{:?}", diff.new_files, diff.modified_files, diff.deleted_files);
-                                     let _ = Emitter::emit(&window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
+                                     let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
                                         message: diff_msg,
                                     });
                                 }
@@ -291,7 +331,9 @@ impl<R: Runtime> AgentLoop<R> {
                         final_result = truncate_tool_result(tool_name, &final_result);
 
                         if success && tool.needs_summarization(&args, &execution_result) {
-                             let _ = Emitter::emit(&window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
+                            // Summarization disabled temporarily due to generic client limitation
+                            /*
+                            let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
                                 message: format!("Summarizing output from {}...", tool_name),
                             });
                             
@@ -303,9 +345,10 @@ impl<R: Runtime> AgentLoop<R> {
                             if let Ok(summary) = summary_agent.prompt(&final_result).await {
                                 final_result = format!("(Summary) {}", summary);
                             }
+                            */
                         }
 
-                        let _ = Emitter::emit(&window, &format!("session:{}", self.session_id), AgentEvent::StepCompleted {
+                        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepCompleted {
                             job: job.clone(),
                             step: ExecutionStep {
                                 status: status.to_string(),
@@ -386,8 +429,8 @@ impl<R: Runtime> AgentLoop<R> {
             });
         }
 
-        let _ = Emitter::emit(&window, &format!("session:{}", self.session_id), AgentEvent::JobCompleted {
-            job: ExecutionJob { status: "completed".to_string(), ..job },
+        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::JobCompleted {
+            job: ExecutionJob { status: "completed".to_string(), ..job.clone() },
             message: final_msg,
         });
     }

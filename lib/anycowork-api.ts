@@ -383,7 +383,9 @@ export const anycoworkApi = {
 
   // Agent Definitions
   getAgent: async (id: string) => ({ id, name: 'Agent', description: '', system_prompt: '' }),
-  updateAgent: async (agentId: string, data: any) => ({}),
+  updateAgent: async (agentId: string, data: any) => {
+    return invoke<Agent>('update_agent', { agentId: agentId, data: data });
+  },
   deleteAgent: async (agentId: string) => ({ success: true }),
 
   // Agent Extras

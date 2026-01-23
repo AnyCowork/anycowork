@@ -62,9 +62,9 @@ pub fn ensure_default_agent(pool: &DbPool) {
             tone: None,
             expertise: None,
             ai_provider: "openai".to_string(),
-            ai_model: "gpt-4o".to_string(),
+            ai_model: "gemini-3-pro-preview".to_string(),
             ai_temperature: 0.7,
-            ai_config: r#"{"provider": "openai", "model": "gpt-4o"}"#.to_string(),
+            ai_config: r#"{"provider": "gemini", "model": "gemini-3-pro-preview"}"#.to_string(),
             system_prompt: Some(r#"You are an intelligent AI Coworker designed to help with daily office tasks.
 Your goal is to be proactive, organized, and helpful. 
 You should:
