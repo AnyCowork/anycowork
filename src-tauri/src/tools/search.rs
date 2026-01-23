@@ -34,15 +34,34 @@ impl<R: Runtime> Tool<R> for SearchTool {
             "required": ["query"]
         })
     }
+    
+    async fn validate_args(&self, args: &Value) -> Result<(), String> {
+         let path_str = args["path"].as_str().unwrap_or(".");
+         if path_str.contains("..") || path_str.starts_with("/") {
+             return Err("Access denied: Paths must be relative and cannot contain '..'".to_string());
+        }
+        Ok(())
+    }
+
+    fn verify_result(&self, result: &Value) -> bool {
+        if let Some(s) = result.as_str() {
+             !s.starts_with("Error:")
+        } else {
+            true
+        }
+    }
+
+    fn needs_summarization(&self, _args: &Value, result: &Value) -> bool {
+        // Summarize if we found valid results (not empty or "No matches")
+        if let Some(s) = result.as_str() {
+             return s != "No matches found." && !s.starts_with("Error:");
+        }
+        false
+    }
 
     async fn execute(&self, args: Value, _ctx: &ToolContext<R>) -> Result<Value, String> {
         let query = args["query"].as_str().ok_or("Missing query")?;
         let path_str = args["path"].as_str().unwrap_or(".");
-
-        // Security check
-        if path_str.contains("..") || path_str.starts_with("/") {
-             return Err("Access denied: Paths must be relative and cannot contain '..'".to_string());
-        }
 
         let root = std::env::current_dir().unwrap_or(PathBuf::from("."));
         let target_path = root.join(path_str);
@@ -70,5 +89,42 @@ impl<R: Runtime> Tool<R> for SearchTool {
         } else {
             Ok(json!(result))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn test_validate_args() {
+        let tool: Box<dyn Tool<tauri::test::MockRuntime>> = Box::new(SearchTool);
+        let args_bad = json!({"query": "test", "path": "../src"});
+        assert!(tool.validate_args(&args_bad).await.is_err());
+    }
+
+    #[test]
+    fn test_verify_result() {
+        let tool: Box<dyn Tool<tauri::test::MockRuntime>> = Box::new(SearchTool);
+        let res_ok = json!("Found matches");
+        assert!(tool.verify_result(&res_ok));
+
+        let res_err = json!("Error: grep failed");
+        assert!(!tool.verify_result(&res_err));
+    }
+
+    #[test]
+    fn test_needs_summarization() {
+        let tool: Box<dyn Tool<tauri::test::MockRuntime>> = Box::new(SearchTool);
+        let empty = json!({});
+        
+        // Valid results -> true
+        let res_found = json!("file.rs:1: match");
+        assert!(tool.needs_summarization(&empty, &res_found));
+
+        // No matches -> false
+        let res_none = json!("No matches found.");
+        assert!(!tool.needs_summarization(&empty, &res_none));
     }
 }

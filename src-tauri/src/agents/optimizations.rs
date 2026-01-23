@@ -185,6 +185,13 @@ pub fn trim_history(
     }
 }
 
+/// Truncation configuration constants
+pub const MAX_TOOL_RESULT_CHARS: usize = 8000; // ~2000 tokens
+pub const MAX_TOOL_RESULT_TOKENS: usize = 2000;
+pub const MAX_HISTORY_TOKENS: usize = 100000; // Safe limit for context window
+pub const TRUNCATION_KEEP_START: usize = 6000; // Characters to keep from start
+pub const TRUNCATION_KEEP_END: usize = 2000; // Characters to keep from end
+
 /// Estimate token count (simplified approximation)
 pub fn estimate_tokens(text: &str) -> usize {
     // Rough estimate: 1 token ≈ 4 characters
@@ -210,6 +217,79 @@ pub fn optimize_history_by_tokens(
         let removed = history.remove(0);
         total_tokens -= estimate_tokens(&removed.content);
     }
+}
+
+/// Smart truncation that keeps both start and end of content
+/// This is better than simple head truncation as it preserves context
+pub fn smart_truncate(text: &str, max_chars: usize) -> String {
+    if text.len() <= max_chars {
+        return text.to_string();
+    }
+
+    // Calculate how much we're removing
+    let removed_chars = text.len() - max_chars;
+
+    // Use configured keep amounts, but adjust if max_chars is small
+    let keep_start = TRUNCATION_KEEP_START.min(max_chars * 3 / 4);
+    let keep_end = TRUNCATION_KEEP_END.min(max_chars / 4);
+
+    // Make sure we don't exceed max_chars
+    let actual_keep_start = keep_start.min(max_chars - keep_end - 100); // 100 for truncation message
+    let actual_keep_end = keep_end.min(max_chars - actual_keep_start - 100);
+
+    let start_part = &text[..actual_keep_start];
+    let end_part = &text[text.len() - actual_keep_end..];
+
+    format!(
+        "{}...\n\n[TRUNCATED {} characters ({} tokens)]\n\n...{}",
+        start_part,
+        removed_chars,
+        estimate_tokens(&text[actual_keep_start..text.len() - actual_keep_end]),
+        end_part
+    )
+}
+
+/// Truncate tool result with smart strategy based on content type
+pub fn truncate_tool_result(tool_name: &str, result: &str) -> String {
+    // If within limits, return as-is
+    if result.len() <= MAX_TOOL_RESULT_CHARS {
+        return result.to_string();
+    }
+
+    // Check estimated tokens
+    let estimated_tokens = estimate_tokens(result);
+    if estimated_tokens <= MAX_TOOL_RESULT_TOKENS {
+        return result.to_string();
+    }
+
+    // Apply smart truncation
+    let truncated = smart_truncate(result, MAX_TOOL_RESULT_CHARS);
+
+    log::warn!(
+        "Truncated {} result from {} chars ({} tokens) to {} chars",
+        tool_name,
+        result.len(),
+        estimated_tokens,
+        truncated.len()
+    );
+
+    truncated
+}
+
+/// Truncate message content before adding to history
+pub fn truncate_message_content(content: &str, role: &str) -> String {
+    // Assistant messages are usually shorter, so we're more lenient
+    let max_chars = if role == "assistant" {
+        MAX_TOOL_RESULT_CHARS * 2 // Allow longer assistant responses
+    } else {
+        MAX_TOOL_RESULT_CHARS
+    };
+
+    if content.len() <= max_chars {
+        return content.to_string();
+    }
+
+    smart_truncate(content, max_chars)
 }
 
 #[cfg(test)]
@@ -364,5 +444,48 @@ mod tests {
 
         let stats = cache.stats();
         assert_eq!(stats.size, 2);
+    }
+
+    #[test]
+    fn test_smart_truncate() {
+        // Short text should not be truncated
+        let short_text = "Hello world";
+        assert_eq!(smart_truncate(short_text, 100), short_text);
+
+        // Long text should be truncated with start and end preserved
+        let long_text = "a".repeat(10000);
+        let truncated = smart_truncate(&long_text, 1000);
+        assert!(truncated.len() <= 1200); // Allow some overhead for truncation message
+        assert!(truncated.contains("TRUNCATED"));
+        assert!(truncated.starts_with("aaa"));
+        assert!(truncated.ends_with("aaa"));
+    }
+
+    #[test]
+    fn test_truncate_tool_result() {
+        // Within limits
+        let short_result = "OK";
+        assert_eq!(truncate_tool_result("bash", short_result), short_result);
+
+        // Exceeds limits
+        let long_result = "x".repeat(20000);
+        let truncated = truncate_tool_result("bash", &long_result);
+        assert!(truncated.len() < long_result.len());
+        assert!(truncated.contains("TRUNCATED"));
+    }
+
+    #[test]
+    fn test_truncate_message_content() {
+        // User message within limits
+        let short_msg = "List files";
+        assert_eq!(truncate_message_content(short_msg, "user"), short_msg);
+
+        // Assistant message gets more space
+        let long_msg = "a".repeat(20000);
+        let truncated_assistant = truncate_message_content(&long_msg, "assistant");
+        let truncated_user = truncate_message_content(&long_msg, "user");
+
+        // Assistant should get more space (or equal if both truncated)
+        assert!(truncated_assistant.len() >= truncated_user.len() - 200);
     }
 }

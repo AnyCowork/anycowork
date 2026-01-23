@@ -31,6 +31,19 @@ impl<R: Runtime> Tool<R> for BashTool {
         })
     }
 
+    fn verify_result(&self, result: &Value) -> bool {
+        // Check exit code
+        if let Some(code) = result["exit_code"].as_i64() {
+            code == 0
+        } else {
+            true // If no exit code, assume success? Or failure? Bash tool always returns exit_code.
+        }
+    }
+
+    fn needs_summarization(&self, _args: &Value, _result: &Value) -> bool {
+        true
+    }
+
     async fn execute(&self, args: Value, ctx: &ToolContext<R>) -> Result<Value, String> {
         let command = args["command"].as_str().ok_or("Missing command argument")?;
 
@@ -67,5 +80,28 @@ impl<R: Runtime> Tool<R> for BashTool {
             "stderr": stderr,
             "exit_code": output.status.code()
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_verify_result() {
+        let tool: Box<dyn Tool<tauri::test::MockRuntime>> = Box::new(BashTool);
+        
+        let res_ok = json!({"exit_code": 0});
+        assert!(tool.verify_result(&res_ok));
+
+        let res_fail = json!({"exit_code": 1});
+        assert!(!tool.verify_result(&res_fail));
+    }
+
+    #[test]
+    fn test_needs_summarization() {
+        let tool: Box<dyn Tool<tauri::test::MockRuntime>> = Box::new(BashTool);
+        assert!(tool.needs_summarization(&json!({}), &json!({})));
     }
 }

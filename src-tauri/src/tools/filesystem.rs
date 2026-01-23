@@ -41,16 +41,28 @@ impl<R: Runtime> Tool<R> for FilesystemTool {
             "required": ["operation", "path"]
         })
     }
+    async fn validate_args(&self, args: &Value) -> Result<(), String> {
+        let path_str = args["path"].as_str().ok_or("Missing path")?;
+        if path_str.contains("..") || path_str.starts_with("/") {
+             return Err("Access denied: Paths must be relative and cannot contain '..'".to_string());
+        }
+        Ok(())
+    }
+
+    fn needs_summarization(&self, args: &Value, _result: &Value) -> bool {
+        // Summarize if reading a file
+        if let Some(op) = args["operation"].as_str() {
+            return op == "read_file";
+        }
+        false
+    }
 
     async fn execute(&self, args: Value, ctx: &ToolContext<R>) -> Result<Value, String> {
         let op = args["operation"].as_str().ok_or("Missing operation")?;
         let path_str = args["path"].as_str().ok_or("Missing path")?;
 
-        // Security: Prevent breaking out of workspace (simplified)
-        if path_str.contains("..") || path_str.starts_with("/") {
-            return Err("Access denied: Paths must be relative and cannot contain '..'".to_string());
-        }
-        
+        // Security check moved to validate_args
+
         // Permission check for write operations
         let requires_approval = match op {
             "write_file" | "delete_file" | "make_dir" | "read_file" | "list_dir" => true,
@@ -95,13 +107,22 @@ impl<R: Runtime> Tool<R> for FilesystemTool {
             },
             "list_dir" => {
                 let entries = fs::read_dir(target_path).map_err(|e| e.to_string())?;
-                let mut names = Vec::new();
+                let mut items = Vec::new();
                 for entry in entries {
                     if let Ok(e) = entry {
-                        names.push(e.file_name().to_string_lossy().to_string());
+                        let name = e.file_name().to_string_lossy().to_string();
+                        let file_type = if e.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                            "directory"
+                        } else {
+                            "file"
+                        };
+                        items.push(json!({
+                            "name": name,
+                            "type": file_type
+                        }));
                     }
                 }
-                Ok(json!(names))
+                Ok(json!(items))
             },
             "make_dir" => {
                  fs::create_dir_all(target_path).map_err(|e| e.to_string())?;
@@ -113,5 +134,42 @@ impl<R: Runtime> Tool<R> for FilesystemTool {
             }
             _ => Err(format!("Unknown operation: {}", op))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn test_validate_args() {
+        let tool: Box<dyn Tool<tauri::test::MockRuntime>> = Box::new(FilesystemTool);
+        
+        // Valid path
+        let args = json!({"operation": "list_dir", "path": "src"});
+        assert!(tool.validate_args(&args).await.is_ok());
+
+        // Invalid path (traversal)
+        let args_bad = json!({"operation": "list_dir", "path": "../src"});
+        assert!(tool.validate_args(&args_bad).await.is_err());
+        
+        // Invalid path (absolute)
+        let args_abs = json!({"operation": "list_dir", "path": "/etc/passwd"});
+        assert!(tool.validate_args(&args_abs).await.is_err());
+    }
+
+    #[test]
+    fn test_needs_summarization() {
+        let tool: Box<dyn Tool<tauri::test::MockRuntime>> = Box::new(FilesystemTool);
+        let empty = json!({});
+        
+        // read_file -> true
+        let args_read = json!({"operation": "read_file", "path": "test.txt"});
+        assert!(tool.needs_summarization(&args_read, &empty));
+
+        // list_dir -> false
+        let args_list = json!({"operation": "list_dir", "path": "."});
+        assert!(!tool.needs_summarization(&args_list, &empty));
     }
 }

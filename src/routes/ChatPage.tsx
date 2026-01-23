@@ -184,7 +184,104 @@ export default function ChatPage() {
             const loadedMessages: Message[] = loadedMessagesData.map((msg: any) => {
               // Parse A2UI from content if present
               let content = msg.content;
+              if (msg.role === 'system' || msg.role === 'tool') {
+                console.log('Raw system/tool message:', { id: msg.id, role: msg.role, content: msg.content, metadata: msg.metadata_json });
+              }
               let a2uiMessages: A2UIMessage[] | undefined = msg.a2ui_messages;
+              let step: ExecutionStep | undefined = undefined;
+
+              // 1. Try to restore ExecutionStep from System messages (Tool Results)
+              // Note: Backend currently saves tool results as 'user' (for some reason), so we check that too.
+              if (msg.role === 'system' || msg.role === 'tool' || (msg.role === 'user' && content.startsWith("Tool '"))) {
+
+                let toolName = "";
+                let toolArgs = {};
+                let resultStr = "";
+                let isToolMessage = false;
+
+                // A. Try parsing from Metadata (preferred)
+                if (msg.metadata_json) {
+                  try {
+                    const metadata = JSON.parse(msg.metadata_json);
+
+                    // If metadata exists, it might be the args.
+                    // Parse tool name from content (reliable prefix)
+                    const nameMatch = content.match(/^Tool '([^']+)' result:/);
+                    if (nameMatch) {
+                      toolName = nameMatch[1];
+                      toolArgs = metadata; // The metadata IS the args object
+
+                      // Extract result string: "Tool 'name' result: <RESULT>"
+                      const prefix = `Tool '${toolName}' result: `;
+                      if (content.startsWith(prefix)) {
+                        resultStr = content.substring(prefix.length);
+                      } else {
+                        // Fallback if prefix matches loosely
+                        const resMatch = content.match(/^Tool '[^']+' result: ([\s\S]*)$/);
+                        if (resMatch) {
+                          resultStr = resMatch[1];
+                        } else {
+                          resultStr = content;
+                        }
+                      }
+
+                      isToolMessage = true;
+                    }
+                  } catch (e) {
+                    // Metadata parsing failed
+                  }
+                }
+
+                // B. Fallback to Regex (Legacy or if metadata strategy failed)
+                if (!isToolMessage) {
+                  const toolResultMatch = content.match(/^Tool '([^']+)' result: ([\s\S]*)$/);
+                  if (toolResultMatch) {
+                    toolName = toolResultMatch[1];
+                    resultStr = toolResultMatch[2];
+                    isToolMessage = true;
+
+                    try {
+                      if (msg.metadata_json) {
+                        toolArgs = JSON.parse(msg.metadata_json);
+                      }
+                    } catch (e) { /* ignore */ }
+                  }
+                }
+
+                if (isToolMessage) {
+                  step = {
+                    id: `step-${msg.id}`,
+                    tool_name: toolName,
+                    tool_args: toolArgs,
+                    status: 'completed',
+                    result: resultStr,
+                    requires_approval: false,
+                    created_at: msg.created_at
+                  };
+
+                  // Force role to system for UI consistency if it was user or tool
+                  msg.role = 'system';
+
+                  // Update content to just the result part so downstream parsers (A2UI) work on the output
+                  content = resultStr;
+                }
+              }
+
+              // 2. Hide raw JSON tool calls from Assistant (Request)
+              // The backend saves the raw JSON request `{ "tool": "...", "args": ... }` as an assistant message.
+              // Since we render the *Result* (above) as a full step (which shows input/output), we don't need this raw texts.
+              if (msg.role === 'assistant') {
+                try {
+                  const trimmed = content.trim();
+                  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                    const parsed = JSON.parse(trimmed);
+                    if (parsed.tool && parsed.args) {
+                      // This is a tool call request. Hide it.
+                      return null;
+                    }
+                  }
+                } catch (e) { /* Not JSON */ }
+              }
 
               if (content && content.includes('---a2ui_JSON---')) {
                 const parts = content.split('---a2ui_JSON---');
@@ -217,9 +314,11 @@ export default function ChatPage() {
                 role: msg.role,
                 content: content,
                 a2uiMessages: a2uiMessages,
+                step: step,
                 timestamp: new Date(msg.created_at).getTime() // Convert string/timestamp to number
               };
-            });
+            }).filter(Boolean) as Message[]; // Filter out nulls (hidden messages)
+
             setMessages(loadedMessages);
           }
         } catch (error) {
@@ -227,8 +326,8 @@ export default function ChatPage() {
         }
       };
       loadMessages();
-    } else if (sessionId === "new") {
-      // Clear messages for new session
+    } else {
+      // Clear messages for new session or when no session selected (after deletion)
       setMessages([]);
     }
   }, [sessionId]);
@@ -300,15 +399,31 @@ export default function ChatPage() {
         if (prev.includes(sessionId)) {
           return prev;
         }
-        return [...prev, sessionId];
+        return [sessionId, ...prev];
       });
     }
   }, [sessionId]);
 
-  // Auto-load latest chat when returning to /chat without session ID
+  // Tab Management: Save active tab to localStorage
+  useEffect(() => {
+    if (activeTab) {
+      localStorage.setItem('chatActiveTab', activeTab);
+    }
+  }, [activeTab]);
+
+  // Auto-load latest chat or restored active tab when returning to /chat without session ID
   useEffect(() => {
     if (!sessionId && sessionsData?.sessions && sessionsData.sessions.length > 0) {
-      // Sort sessions by updated_at (most recent first)
+      // 1. Try to restore last active tab
+      const lastActiveTab = localStorage.getItem('chatActiveTab');
+      const lastActiveSession = sessionsData.sessions.find(s => s.id === lastActiveTab);
+
+      if (lastActiveTab && lastActiveSession) {
+        navigate(`/chat/${lastActiveTab}`, { replace: true });
+        return;
+      }
+
+      // 2. Fallback: Sort sessions by updated_at (most recent first)
       const sortedSessions = [...sessionsData.sessions].sort((a, b) => {
         const dateA = new Date(a.updated_at || a.created_at).getTime();
         const dateB = new Date(b.updated_at || b.created_at).getTime();
@@ -378,7 +493,7 @@ export default function ChatPage() {
       if (prev.includes(sessionIdToOpen)) {
         return prev;
       }
-      return [...prev, sessionIdToOpen];
+      return [sessionIdToOpen, ...prev];
     });
     setActiveTab(sessionIdToOpen);
     navigate(`/chat/${sessionIdToOpen}`);
@@ -535,6 +650,24 @@ export default function ChatPage() {
           // If no message, keep the previous "thinking" message (e.g. "Analyzing Cargo.toml...")
         } else if (payload.type === 'thinking') {
           setThinkingMessage(payload.message);
+        } else if (payload.type === 'step_started') {
+          // Show that a step is starting
+          const step = payload.step;
+          let operationDesc = `Executing ${step.tool_name}`;
+
+          // Add operation details if available
+          if (step.tool_name === 'bash' && step.tool_args.command) {
+            operationDesc = `Running: \`${step.tool_args.command}\``;
+          } else if (step.tool_name === 'filesystem') {
+            const op = step.tool_args.operation || 'operation';
+            const path = step.tool_args.path || step.tool_args.directory || '';
+            operationDesc = `${op} ${path}`;
+          } else if (step.tool_name === 'search' || step.tool_name === 'grep_search') {
+            const pattern = step.tool_args.pattern || step.tool_args.query || '';
+            operationDesc = `Searching for: ${pattern}`;
+          }
+
+          setThinkingMessage(operationDesc);
         } else if (payload.type === 'approval_required') {
           // payload.step matches ExecutionStep interface
           setPendingApproval(payload.step);
@@ -610,7 +743,16 @@ export default function ChatPage() {
           // Show tool output
           setPendingApproval(null); // Clear approval state
           const step = payload.step;
-          let content = `✓ **${step.tool_name}** completed.`;
+
+          // Create a structured step object for custom rendering
+          const toolMsg: Message = {
+            id: `step-${step.id}`,
+            role: "system",
+            content: "", // Will be rendered via step property
+            step: step,
+            timestamp: Date.now(),
+          };
+
           let a2uiMessages: A2UIMessage[] | undefined;
 
           // Attempt to parse result for file listings and clean output
@@ -656,33 +798,19 @@ export default function ChatPage() {
               }
             }
 
-            // 4. Render
+            // 4. Render - check for file lists for A2UI
             if (isFileList && fileList.length > 0) {
               a2uiMessages = createFileListA2UI(fileList, step.tool_name);
-              content = ""; // Suppress text if A2UI is shown
-            } else {
-              // Fallback: show clean content (stdout)
-              if (displayContent) {
-                content += `\n\n\`\`\`\n${displayContent}\n\`\`\``;
-              }
             }
-
           } catch (e) {
-            // Absolute fallback
-            if (step.result) content += `\n\n\`\`\`\n${step.result}\n\`\`\``;
+            // Ignore parsing errors
           }
 
-          if (step.error) {
-            content += `\n\n**Error:**\n\`\`\`\n${step.error}\n\`\`\``;
+          // Attach a2ui messages if we have them
+          if (a2uiMessages) {
+            toolMsg.a2uiMessages = a2uiMessages;
           }
 
-          const toolMsg: Message = {
-            id: `step-${step.id}`,
-            role: "system", // Use system role to avoid token appending duplication
-            content: content,
-            a2uiMessages: a2uiMessages,
-            timestamp: Date.now(),
-          };
           setMessages(prev => [...prev, toolMsg]);
         } else if (payload.type === 'job_completed') {
           setCurrentJob(null);
@@ -1052,9 +1180,11 @@ export default function ChatPage() {
                       onClick={() => openTab(tabId)}
                       className={cn(
                         "group relative h-8 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200",
-                        "data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm",
-                        "hover:bg-muted",
-                        "border border-transparent data-[state=active]:border-primary/20",
+                        // Inactive state
+                        "hover:bg-muted text-muted-foreground hover:text-foreground",
+                        // Active State styling (Enhanced)
+                        "data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:font-bold data-[state=active]:shadow-sm",
+                        "border border-transparent data-[state=active]:border-primary/10",
                         "min-w-[120px] max-w-[200px]",
                         "flex items-center gap-2 justify-between"
                       )}
@@ -1125,7 +1255,7 @@ export default function ChatPage() {
               <div
                 key={message.id}
                 className={cn(
-                  "flex gap-4",
+                  "flex gap-4 max-w-full",
                   message.role === "user" && "flex-row-reverse",
                   (message.role === "system" || message.message_type === "thinking") && "pl-8 gap-2"
                 )}
@@ -1147,18 +1277,20 @@ export default function ChatPage() {
 
                 <div
                   className={cn(
-                    "flex-1 space-y-2",
+                    "flex-1 space-y-2 max-w-full overflow-hidden",
                     message.role === "user" && "flex flex-col items-end"
                   )}
                 >
                   <div
                     className={cn(
-                      "inline-block shadow-sm",
+                      "inline-block",
                       message.role === "system" || message.message_type === "thinking"
-                        ? "px-3 py-1.5 text-xs text-muted-foreground bg-muted/40 border border-border/30 rounded-lg"
+                        ? message.step
+                          ? "" // No background wrapper for tool execution messages
+                          : "px-3 py-1.5 text-xs text-muted-foreground bg-muted/40 border border-border/30 rounded-lg shadow-sm"
                         : message.role === "user"
-                          ? "px-4 py-3 bg-accent text-accent-foreground border border-accent-foreground/10 rounded-2xl rounded-br-md"
-                          : "px-4 py-3 bg-secondary text-secondary-foreground border border-border/50 rounded-2xl rounded-bl-md max-w-full overflow-x-auto"
+                          ? "px-4 py-3 bg-accent text-accent-foreground border border-accent-foreground/10 rounded-2xl rounded-br-md break-words shadow-sm"
+                          : "px-4 py-3 bg-secondary text-secondary-foreground border border-border/50 rounded-2xl rounded-bl-md max-w-full overflow-hidden break-words shadow-sm"
                     )}
                   >
                     {/* Show text content only if:
@@ -1166,19 +1298,127 @@ export default function ChatPage() {
                         2. Or there's meaningful text content
                     */}
                     {message.step ? (
-                      // Render Persistent Action History
-                      <div className="flex flex-col gap-2 min-w-[300px]">
-                        <div className="flex items-center justify-between border-b border-border/10 pb-2 mb-1">
-                          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider opacity-70">
-                            {message.id.startsWith('rejected') ? (
-                              <><XCircle className="h-3 w-3 text-red-500" /> Action Rejected</>
-                            ) : (
-                              <><CheckCircle className="h-3 w-3 text-green-500" /> Action Approved</>
+                      // Compact Tool Execution Display - No background wrapper
+                      <div className="flex flex-col gap-0 max-w-2xl">
+                        {/* Compact Header - Always Visible */}
+                        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <div className={cn(
+                              "h-6 w-6 rounded-md flex items-center justify-center shrink-0",
+                              message.step.status === 'failed' || message.id.startsWith('rejected')
+                                ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+                                : "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+                            )}>
+                              {message.step.status === 'failed' || message.id.startsWith('rejected')
+                                ? <XCircle className="h-4 w-4" />
+                                : <CheckCircle className="h-4 w-4" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-semibold text-foreground/90 truncate">
+                                {message.step.tool_name === "filesystem" ? "📁 Filesystem" :
+                                  message.step.tool_name === "bash" ? "⚡ Command" :
+                                    message.step.tool_name === "search" ? "🔍 Search" :
+                                      "🔧 " + message.step.tool_name.replace(/_/g, ' ')}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground truncate">
+                                {(() => {
+                                  // Show operation summary
+                                  const args = message.step.tool_args;
+                                  if (message.step.tool_name === "bash" && args.command) {
+                                    return args.command.substring(0, 60) + (args.command.length > 60 ? '...' : '');
+                                  } else if (message.step.tool_name === "filesystem" && args.operation) {
+                                    return `${args.operation} ${args.path || args.directory || ''}`.substring(0, 60);
+                                  } else if (message.step.tool_name === "search") {
+                                    return `${args.pattern || args.query || ''}`.substring(0, 60);
+                                  }
+                                  return Object.keys(args).slice(0, 2).join(', ');
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+                          <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-mono opacity-60 shrink-0">
+                            {new Date(message.timestamp).toLocaleTimeString()}
+                          </Badge>
+                        </div>
+
+                        {/* Collapsible Details */}
+                        <details className="group">
+                          <summary className="flex items-center gap-2 cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2 hover:bg-muted/10 rounded-lg">
+                            <div className="transition-transform group-open:rotate-90">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            </div>
+                            <span>Show Details</span>
+                          </summary>
+
+                          <div className="px-3 py-2 space-y-2 text-xs">
+                            {/* Request Section - Collapsible */}
+                            {message.step.tool_args && Object.keys(message.step.tool_args).length > 0 && (
+                              <details className="group/req">
+                                <summary className="flex items-center gap-2 cursor-pointer font-medium text-muted-foreground hover:text-foreground py-1">
+                                  <div className="transition-transform group-open/req:rotate-90">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                  </div>
+                                  <span>Request Parameters</span>
+                                </summary>
+                                <div className="mt-1 ml-4 bg-muted/20 rounded-md p-2">
+                                  <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
+                                    {JSON.stringify(message.step.tool_args, null, 2)}
+                                  </pre>
+                                </div>
+                              </details>
+                            )}
+
+                            {/* Output Section - Collapsible */}
+                            {message.step.result && (
+                              <details className="group/out" open={message.a2uiMessages && message.a2uiMessages.length > 0}>
+                                <summary className="flex items-center gap-2 cursor-pointer font-medium text-muted-foreground hover:text-foreground py-1">
+                                  <div className="transition-transform group-open/out:rotate-90">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                  </div>
+                                  <span>Output</span>
+                                  <Badge variant="secondary" className="text-[9px] h-4 px-1">
+                                    {message.step.result.length > 1000 ? `${(message.step.result.length / 1000).toFixed(1)}k chars` : `${message.step.result.length} chars`}
+                                  </Badge>
+                                </summary>
+                                <div className="mt-1 ml-4">
+                                  {message.a2uiMessages && message.a2uiMessages.length > 0 ? (
+                                    <A2UIRenderer
+                                      messages={message.a2uiMessages}
+                                      onAction={handleA2UIAction}
+                                      variant="minimal"
+                                    />
+                                  ) : (
+                                    <div className="bg-muted/20 rounded-md p-2">
+                                      <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap break-words max-h-60 overflow-y-auto">
+                                        {(() => {
+                                          try {
+                                            const parsed = JSON.parse(message.step.result);
+                                            return JSON.stringify(parsed, null, 2);
+                                          } catch {
+                                            return message.step.result;
+                                          }
+                                        })()}
+                                      </pre>
+                                    </div>
+                                  )}
+                                </div>
+                              </details>
+                            )}
+
+                            {/* Error Section */}
+                            {message.step.error && (
+                              <div className="bg-red-50/50 dark:bg-red-950/20 rounded-md p-2">
+                                <div className="text-[10px] font-semibold text-red-600 dark:text-red-400 mb-1 flex items-center gap-1">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Error
+                                </div>
+                                <pre className="text-[10px] font-mono text-red-500 dark:text-red-400 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
+                                  {message.step.error}
+                                </pre>
+                              </div>
                             )}
                           </div>
-                          <span className="text-[10px] opacity-50 font-mono">{message.step.tool_name}</span>
-                        </div>
-                        {renderApprovalContent(message.step)}
+                        </details>
                       </div>
                     ) : (
                       message.content && (
@@ -1194,20 +1434,24 @@ export default function ChatPage() {
                           remarkPlugins={[remarkGfm]}
                           components={{
                             pre: ({ node, ...props }) => (
-                              <div className="overflow-auto w-full my-2 rounded-lg bg-black/10 dark:bg-black/30 p-2">
-                                <pre {...props} />
+                              <div className="overflow-x-auto w-full my-2 rounded-lg bg-black/10 dark:bg-black/30 p-2">
+                                <pre className="whitespace-pre-wrap break-words text-xs" {...props} />
                               </div>
                             ),
-                            code: ({ node, ...props }) => (
-                              <code className="bg-black/10 dark:bg-black/30 rounded px-1 py-0.5" {...props} />
-                            )
+                            code: ({ node, inline, ...props }: any) =>
+                              inline ? (
+                                <code className="bg-black/10 dark:bg-black/30 rounded px-1 py-0.5 text-xs break-all" {...props} />
+                              ) : (
+                                <code className="block whitespace-pre-wrap break-words text-xs" {...props} />
+                              )
                           }}
                         >
                           {message.content}
                         </ReactMarkdown>
                       )
                     )}
-                    {message.a2uiMessages && message.a2uiMessages.length > 0 && (
+                    {/* Only render A2UI separately if not part of a step (already rendered in step details) */}
+                    {message.a2uiMessages && message.a2uiMessages.length > 0 && !message.step && (
                       <div className={cn(
                         "w-full",
                         message.content && message.content.trim() && message.content.length < 200 ? "mt-4" : ""
@@ -1338,8 +1582,8 @@ export default function ChatPage() {
                         Thinking Process
                       </div>
                       {isReasoningOpen && (
-                        <div className="p-3 bg-black/5 dark:bg-black/20 overflow-x-auto">
-                          <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono">
+                        <div className="p-3 bg-black/5 dark:bg-black/20">
+                          <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-words font-mono">
                             {reasoning}
                           </pre>
                         </div>
