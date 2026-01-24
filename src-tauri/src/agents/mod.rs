@@ -8,9 +8,13 @@ mod workflow_tests;
 
 use rig::completion::Prompt;
 use rig::completion::Chat;
+use rig::agent::Agent;
+use rig::completion::CompletionModel;
 use rig::providers::openai;
 use rig::providers::anthropic;
 use rig::providers::gemini;
+use rig::client::ProviderClient;
+use rig::client::CompletionClient;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio::sync::oneshot;
@@ -28,6 +32,9 @@ use optimizations::{
     truncate_tool_result,
     truncate_message_content,
     optimize_history_by_tokens,
+    get_message_content,
+    create_user_message,
+    create_assistant_message,
     MAX_HISTORY_TOKENS,
 };
 
@@ -90,7 +97,7 @@ impl<R: Runtime> AgentLoop<R> {
 
         // 1. Add User Message to History
         let truncated_user_message = truncate_message_content(&user_message, "user");
-        self.history.push(rig::completion::Message { role: "user".to_string(), content: truncated_user_message });
+        self.history.push(create_user_message(truncated_user_message));
 
         // Prepare tool definitions
         let tools_desc = self.tools.iter().map(|t| {
@@ -101,11 +108,24 @@ impl<R: Runtime> AgentLoop<R> {
             })
         }).collect::<Vec<_>>();
 
-        // Manual prompt injection for tools
-        let tools_prompt = format!(
-            "You are an intelligent agent with access to the following tools:\n\n{}\n\nRULES:\n1. To use a tool, you MUST output ONLY a valid JSON object matching the 'tool' and 'args' schema.\n2. Example: {{\"tool\": \"filesystem\", \"args\": {{\"operation\": \"list_dir\", \"path\": \".\"}}}}\n3. If a user asks to perform an action available via tools (like listing files), USE THE TOOL. Do NOT describe what you will do, just do it.\n4. Do not apologize or ask for clarification if the request is clear and you have a tool for it.\n5. Output ONLY the JSON for the tool call, no other text.\n6. For multi-step tasks, execute the first step immediately. Do NOT stop until all requested steps are completed.\n7. ONLY if the task is fully completed or you cannot proceed, then output plain text to answer.",
-            serde_json::to_string_pretty(&tools_desc).unwrap()
-        );
+        // Load tool use prompt template
+        // Using runtime read as per user request for data separation
+        let template_str = std::fs::read_to_string("src-tauri/prompts/tool_use_system.j2")
+            // Fallback for dev/build environments where file might not be relative to CWD
+            .unwrap_or_else(|_| include_str!("../../prompts/tool_use_system.j2").to_string());
+
+        let mut env = minijinja::Environment::new();
+        env.add_template("tool_use", &template_str).unwrap(); // Panic if template invalid (should only happen in dev)
+        
+        let tools_json = serde_json::to_string_pretty(&tools_desc).unwrap();
+        let tmpl = env.get_template("tool_use").unwrap();
+        
+        // Render prompt (Plan context can be passed here if extended)
+        let tools_prompt = tmpl.render(minijinja::context! {
+            tools_desc => tools_json,
+            plan => Value::Null,
+            current_task => Value::Null
+        }).unwrap();
 
         // Select and Build Agent based on Provider
         // Dispatching to a common handler or using Box<dyn Chat> would be ideal, 
@@ -116,26 +136,21 @@ impl<R: Runtime> AgentLoop<R> {
             "openai" => {
                 let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
                 if api_key.is_empty() { self.send_error(&window, "Error: OPENAI_API_KEY not set", &job); return; }
-                let client = openai::Client::new(&api_key);
+                let client = openai::Client::from_env();
                 let agent = client.agent(&self.model).preamble(&tools_prompt).build();
                 self.run_loop(agent, &window, &job, permission_manager, &db_pool, user_message).await;
             }
             "gemini" => {
                 let api_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
                 if api_key.is_empty() { self.send_error(&window, "Error: GEMINI_API_KEY not set", &job); return; }
-                let client = gemini::Client::new(&api_key);
+                let client = gemini::Client::from_env();
                 let agent = client.agent(&self.model).preamble(&tools_prompt).build();
                 self.run_loop(agent, &window, &job, permission_manager, &db_pool, user_message).await;
             }
              "anthropic" => {
                 let api_key = std::env::var("ANTHROPIC_API_KEY").unwrap_or_default();
                 if api_key.is_empty() { self.send_error(&window, "Error: ANTHROPIC_API_KEY not set", &job); return; }
-                let client = anthropic::Client::new(
-                    &api_key,
-                    "https://api.anthropic.com/v1",
-                    None,
-                    "2023-06-01"
-                );
+                let client = anthropic::Client::from_env();
                 let agent = client.agent(&self.model).preamble(&tools_prompt).build();
                 self.run_loop(agent, &window, &job, permission_manager, &db_pool, user_message).await;
             }
@@ -153,10 +168,10 @@ impl<R: Runtime> AgentLoop<R> {
         });
     }
 
-    // Generic run loop using the Chat trait
-    pub async fn run_loop<A: Chat>(
+    // Generic run loop using the Agent struct
+    pub async fn run_loop<M: CompletionModel>(
         &mut self,
-        agent: A, // Generic agent implementing Chat
+        agent: Agent<M>, 
         window: &tauri::WebviewWindow<R>,
         job: &ExecutionJob,
         permission_manager: Arc<PermissionManager>,
@@ -176,7 +191,7 @@ impl<R: Runtime> AgentLoop<R> {
             let prompt_msg = if let Some(last_msg) = self.history.pop() {
                 last_msg
             } else {
-                rig::completion::Message { role: "user".to_string(), content: "continue".to_string() }
+                create_user_message("continue".to_string())
             };
             
             let current_history = self.history.clone();
@@ -185,7 +200,8 @@ impl<R: Runtime> AgentLoop<R> {
             self.history.push(prompt_msg.clone());
 
             // Use chat() to include history context
-            let response = match agent.chat(&prompt_msg.content, current_history).await {
+            // We revert to blocking chat because stream_chat is not easily available on Agent<M> in this version
+            let response = match agent.chat(&get_message_content(&prompt_msg), current_history).await {
                 Ok(r) => r.to_string(),
                 Err(e) => {
                     println!("Error: {}", e);
@@ -195,8 +211,19 @@ impl<R: Runtime> AgentLoop<R> {
                     break;
                 }
             };
+
+            // Post-process response to show thinking if it contains text before tool
+            // (We do this after we get the full response)
+            let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
+                message: format!("Raw LLM Response: {}", response),
+            });
             
             // Attempt to parse tool call
+            // Debug: Emit raw response to help diagnose tool usage issues
+            let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
+                message: format!("Raw LLM Response: {}", response),
+            });
+
             // Attempt to parse tool call
             let tool_call_json = extract_tool_call(&response);
 
@@ -210,8 +237,8 @@ impl<R: Runtime> AgentLoop<R> {
                         // For assistant tool calls, we could store metadata, but usually the text is enough or we parse it.
                         // However, to be consistent, let's just pass None or the args if we wanted.
                         // For now, let's keep it simple for the assistant side as the UI parses the text fine for "Thinking".
-                        save_message(&db_pool, "assistant", &truncated_response, &self.session_id, None);
-                        self.history.push(rig::completion::Message { role: "assistant".to_string(), content: truncated_response });
+                        save_message(&db_pool, "assistant", &response, &self.session_id, None);
+                        self.history.push(create_assistant_message(truncated_response));
 
                         // VALIDATION START
                         let schema_json = tool.parameters_schema();
@@ -244,8 +271,8 @@ impl<R: Runtime> AgentLoop<R> {
                              // Add failure to history and DB
                             let fail_msg_full = format!("Tool '{}' validation failed: {}", tool_name, fail_msg);
                             let truncated_fail_msg = truncate_message_content(&fail_msg_full, "user");
-                            save_message(&db_pool, "tool", &truncated_fail_msg, &self.session_id, Some(args.to_string()));
-                            self.history.push(rig::completion::Message { role: "user".to_string(), content: truncated_fail_msg });
+                            save_message(&db_pool, "tool", &fail_msg_full, &self.session_id, Some(args.to_string()));
+                            self.history.push(create_user_message(truncated_fail_msg));
 
                             continue;
                         }
@@ -268,8 +295,8 @@ impl<R: Runtime> AgentLoop<R> {
                              // Add failure to history and DB
                              let fail_msg_full = format!("Tool '{}' validation failed: {}", tool_name, fail_msg);
                              let truncated_fail_msg = truncate_message_content(&fail_msg_full, "user");
-                             save_message(&db_pool, "tool", &truncated_fail_msg, &self.session_id, Some(args.to_string()));
-                             self.history.push(rig::completion::Message { role: "user".to_string(), content: truncated_fail_msg });
+                             save_message(&db_pool, "tool", &fail_msg_full, &self.session_id, Some(args.to_string()));
+                             self.history.push(create_user_message(truncated_fail_msg));
                              continue;
                         }
 
@@ -362,9 +389,9 @@ impl<R: Runtime> AgentLoop<R> {
                         let truncated_tool_result = truncate_message_content(&tool_result_msg, "user");
                         
                         // IMPORTANT: Save as 'tool' role with args as metadata
-                        save_message(&db_pool, "tool", &truncated_tool_result, &self.session_id, Some(args.to_string()));
+                        save_message(&db_pool, "tool", &tool_result_msg, &self.session_id, Some(args.to_string()));
                         
-                        self.history.push(rig::completion::Message { role: "user".to_string(), content: truncated_tool_result });
+                        self.history.push(create_user_message(truncated_tool_result));
 
                         // Optimize history to prevent context overflow
                         optimize_history_by_tokens(&mut self.history, MAX_HISTORY_TOKENS);
@@ -381,7 +408,7 @@ impl<R: Runtime> AgentLoop<R> {
 
             // Add to history with truncation
             let truncated_final_response = truncate_message_content(&final_response_text, "assistant");
-            self.history.push(rig::completion::Message { role: "assistant".to_string(), content: truncated_final_response });
+            self.history.push(create_assistant_message(truncated_final_response));
             break;
         }
 
@@ -405,7 +432,7 @@ impl<R: Runtime> AgentLoop<R> {
             tauri::async_runtime::spawn(async move {
                 let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
                 if !api_key.is_empty() {
-                    let client = openai::Client::new(&api_key);
+                    let client = openai::Client::from_env();
                     let title_agent = client.agent(&model_clone)
                         .preamble("You are a helpful assistant. Generate a very concise title (3-5 words) for a chat session based on the user's first message. Do not use quotes. Do not say 'Title:'. Just the title.")
                         .build();
@@ -478,56 +505,101 @@ fn save_message(db_pool: &DbPool, role: &str, content: &str, session_id: &str, m
 
 // Updated start_chat_task
 // Updated start_chat_task
+pub mod planner;
+pub mod coordinator;
+
+use coordinator::Coordinator;
+
+// Updated start_chat_task
 pub fn start_chat_task<R: Runtime>(
-    mut agent_loop: AgentLoop<R>,
+    // mut agent_loop: AgentLoop<R>, // No longer need AgentLoop passed in, or we wrap it in Coordinator
+    // Actually start_chat_task signature shouldn't change too much if we want to avoid breaking callers.
+    // Callers pass AgentLoop. We can extract info from it or just change caller.
+    // Let's change this function signature slightly or extract fields.
+    // Existing callers: `src-tauri/src/lib.rs` (likely).
+    // Let's keep signature similar but expect slightly different args if needed.
+    // But wait, AgentLoop::new is async. Callers usually do: `let loop = AgentLoop::new(...)`.
+    // Let's take the necessary components to build Coordinator.
+    
+    // Changing signature:
+    agent_db: DbAgent, // Need DB agent config to build Coordinator/Planner
     message: String,
     session_id: String,
     window: tauri::WebviewWindow<R>,
     pending_approvals: Arc<dashmap::DashMap<String, oneshot::Sender<bool>>>,
     permission_manager: Arc<PermissionManager>,
     db_pool: DbPool,
+    mode: String,
 ) {
-    let job_id = Uuid::new_v4().to_string();
-    agent_loop.session_id = session_id;
+    let coordinator = Coordinator::new(
+        session_id,
+        agent_db,
+        window,
+        db_pool,
+        permission_manager,
+        pending_approvals,
+        mode,
+    );
     
     tauri::async_runtime::spawn(async move {
-        agent_loop.run(message, window, job_id, pending_approvals, permission_manager, db_pool).await;
+        coordinator.run(message).await;
     });
 }
 
+
 fn extract_tool_call(response: &str) -> Option<Value> {
-    // 1. Try pure JSON
+    // 1. Try pure JSON first
     if let Ok(json) = serde_json::from_str::<Value>(response) {
-        if json.is_object() {
+        if json.is_object() && json.get("tool").is_some() {
             return Some(json);
         }
     }
 
-    // 2. Try identifying JSON in markdown code blocks like ```json ... ```
-    // Note: This is a simple heurisitic, rigorous parsing might need regex
-    // But find('{') and rfind('}') usually works well enough if there is only one JSON object.
+    // 2. Scan for JSON objects logic
+    // We look for the first '{' and try to find a matching '}' that forms valid JSON with a "tool" field.
+    let chars: Vec<char> = response.chars().collect();
+    let len = chars.len();
+    let mut i = 0;
 
-    if let Some(start) = response.find('{') {
-        if let Some(end) = response.rfind('}') {
-            if start <= end {
-                // Slicing in Rust is [start..end) (exclusive), so strict inequality for empty {} is fine
-                // But to include the '}', we need end + 1.
-                // We must be careful that end + 1 is a valid char boundary.
-                // Since '}' is ASCII (1 byte), end + 1 is safe if response ends with '}'.
-                // However, rfind returns the index of the start of key char.
-                // '}' is 1 byte, so end + 1 is the correct limit.
+    while i < len {
+        if chars[i] == '{' {
+            let mut balance = 1;
+            let mut j = i + 1;
+            let mut in_string = false;
+            let mut escape = false;
+
+            while j < len {
+                let c = chars[j];
                 
-                let limit = end + 1;
-                if limit <= response.len() {
-                    let potential_json = &response[start..limit];
-                    if let Ok(json) = serde_json::from_str::<Value>(potential_json) {
-                        if json.is_object() {
-                            return Some(json);
+                if escape {
+                    escape = false;
+                } else {
+                    if c == '\\' {
+                        escape = true;
+                    } else if c == '"' {
+                        in_string = !in_string;
+                    } else if !in_string {
+                        if c == '{' {
+                            balance += 1;
+                        } else if c == '}' {
+                            balance -= 1;
+                            if balance == 0 {
+                                // Found a balanced block [i ..= j]
+                                let candidate: String = chars[i..=j].iter().collect();
+                                if let Ok(json) = serde_json::from_str::<Value>(&candidate) {
+                                    if json.is_object() && json.get("tool").is_some() {
+                                        return Some(json);
+                                    }
+                                }
+                                break;
+                            }
                         }
                     }
                 }
+                j += 1;
             }
         }
+        i += 1;
     }
     
     None

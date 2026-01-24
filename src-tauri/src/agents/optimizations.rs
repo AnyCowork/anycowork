@@ -5,6 +5,7 @@
 
 use std::time::Duration;
 use tokio::time::timeout;
+use uuid::Uuid;
 
 /// Configuration for agent execution optimization
 #[derive(Debug, Clone)]
@@ -201,7 +202,7 @@ pub fn estimate_tokens(text: &str) -> usize {
 /// Calculate total tokens in history
 pub fn calculate_history_tokens(history: &[rig::completion::Message]) -> usize {
     history.iter()
-        .map(|msg| estimate_tokens(&msg.content))
+        .map(|msg| estimate_tokens(&get_message_content(msg)))
         .sum()
 }
 
@@ -215,7 +216,7 @@ pub fn optimize_history_by_tokens(
     while total_tokens > max_tokens && !history.is_empty() {
         // Remove oldest message
         let removed = history.remove(0);
-        total_tokens -= estimate_tokens(&removed.content);
+        total_tokens -= estimate_tokens(&get_message_content(&removed));
     }
 }
 
@@ -290,6 +291,31 @@ pub fn truncate_message_content(content: &str, role: &str) -> String {
     }
 
     smart_truncate(content, max_chars)
+}
+
+/// Extract content from message (handling Enum variants)
+/// Extract content from message (handling Enum variants)
+pub fn get_message_content(msg: &rig::completion::Message) -> String {
+    match msg {
+        rig::completion::Message::User { content, .. } => {
+            content.iter().map(|c| format!("{:?}", c)).collect::<Vec<_>>().join(" ")
+        },
+        rig::completion::Message::Assistant { content, .. } => {
+             content.iter().map(|c| format!("{:?}", c)).collect::<Vec<_>>().join(" ")
+        },
+    }
+}
+
+pub fn create_user_message(content: String) -> rig::completion::Message {
+    rig::completion::Message::from(content)
+}
+
+pub fn create_assistant_message(content: String) -> rig::completion::Message {
+    let content = rig::completion::message::AssistantContent::from(content);
+    rig::completion::Message::Assistant { 
+        id: Some(Uuid::new_v4().to_string()),
+        content: rig::one_or_many::OneOrMany::one(content) 
+    }
 }
 
 #[cfg(test)]

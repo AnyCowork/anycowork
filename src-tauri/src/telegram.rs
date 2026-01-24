@@ -5,6 +5,8 @@ use teloxide::prelude::*;
 use diesel::prelude::*;
 use rig::completion::Prompt;
 use rig::providers::openai;
+use rig::client::ProviderClient;
+use rig::client::CompletionClient;
 
 use crate::database::DbPool;
 use crate::models::{Agent, TelegramConfig};

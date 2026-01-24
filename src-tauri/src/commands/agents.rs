@@ -175,6 +175,7 @@ pub async fn chat_internal<R: Runtime>(
     state: State<'_, AppState>,
     session_id: String,
     message: String,
+    mode: Option<String>,
 ) -> Result<String, String> {
     use schema::sessions::dsl::id as session_id_col;
     use schema::sessions::dsl::sessions;
@@ -211,18 +212,16 @@ pub async fn chat_internal<R: Runtime>(
         .execute(&mut conn)
         .map_err(|e| e.to_string())?;
 
-    // 4. Create AgentLoop
-    let loop_instance = crate::agents::AgentLoop::<R>::new(&agent_record).await;
-
-    // 5. Start Background Task
+    // 4. Start Background Task (AgentLoop instantiation handled inside start_chat_task -> Coordinator)
     crate::agents::start_chat_task(
-        loop_instance,
+        agent_record,
         message,
         session_id,
         window,
         state.pending_approvals.clone(),
-        state.permission_manager.clone(), // Add permission manager
+        state.permission_manager.clone(),
         state.db_pool.clone(),
+        mode.unwrap_or_else(|| "planning".to_string()),
     );
 
     Ok("started".to_string())
@@ -234,8 +233,9 @@ pub async fn chat(
     state: State<'_, AppState>,
     session_id: String,
     message: String,
+    mode: Option<String>,
 ) -> Result<String, String> {
-    chat_internal(window, state, session_id, message).await
+    chat_internal(window, state, session_id, message, mode).await
 }
 
 #[tauri::command]

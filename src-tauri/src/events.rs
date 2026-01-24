@@ -23,6 +23,9 @@ pub enum AgentEvent {
     // Status
     Thinking { message: String },
     Error { message: String, error: Option<String> },
+    
+    // Planning
+    PlanUpdate { plan: crate::models::PlanUpdate },
 }
 
 #[derive(Serialize, Clone, Debug)]

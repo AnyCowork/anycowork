@@ -27,13 +27,17 @@ import {
   Clock,
   AlertTriangle,
   X,
+  Zap,
+  ListTodo,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { listen } from '@tauri-apps/api/event';
 import { cn } from "@/lib/utils";
 import { useCreateSession, useSessions, useAgents, useDeleteSession, useServerInfo } from "@/lib/hooks/use-anycowork";
-import { anycoworkApi } from "@/lib/anycowork-api"; // Added
+import { anycoworkApi, PlanUpdate } from "@/lib/anycowork-api"; // Added
 import { A2UIRenderer } from "@/components/a2ui/A2UIRenderer";
 import { A2UIMessage } from "@/src/lib/a2ui-processor";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -91,6 +95,16 @@ interface ExecutionStep {
   completed_at?: string;
 }
 
+// Plan/Scratchpad
+interface PlanState {
+  tasks: {
+    id: string;
+    description: string;
+    status: 'pending' | 'running' | 'completed' | 'failed';
+    result?: string;
+  }[];
+}
+
 interface ExecutionJob {
   id: string;
   session_id: string;
@@ -122,6 +136,7 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   const [selectedModel, setSelectedModel] = useState<string>("gemini-2.0-flash");
+  const [executionMode, setExecutionMode] = useState<"planning" | "fast">("planning"); // Default to planning
 
   // Tab state for multi-session management
   const [openTabs, setOpenTabs] = useState<string[]>([]);
@@ -565,7 +580,7 @@ export default function ChatPage() {
           // Navigate to the new session
           navigate(`/chat/${newSession.id}`, { replace: true });
           // Send message immediately with the new session ID
-          await sendMessage(messageContent, undefined, false, newSession.id);
+          await sendMessage(messageContent, undefined, false, newSession.id, executionMode);
         },
         onError: (error) => {
           console.error("Failed to create session:", error);
@@ -573,7 +588,7 @@ export default function ChatPage() {
         }
       });
     } else {
-      await sendMessage(messageContent);
+      await sendMessage(messageContent, undefined, false, sessionId, executionMode);
     }
   };
 
@@ -592,6 +607,9 @@ export default function ChatPage() {
   // State for execution job tracking
   const [currentJob, setCurrentJob] = useState<ExecutionJob | null>(null);
   const [pendingApproval, setPendingApproval] = useState<ExecutionStep | null>(null);
+  const [activePlan, setActivePlan] = useState<PlanState | null>(null);
+  const [isPlanOpen, setIsPlanOpen] = useState(true);
+
   // Listen for Tauri events
   useEffect(() => {
     let unlisten: () => void;
@@ -656,7 +674,30 @@ export default function ChatPage() {
           }
           // If no message, keep the previous "thinking" message (e.g. "Analyzing Cargo.toml...")
         } else if (payload.type === 'thinking') {
+          // Show thinking in status bar
           setThinkingMessage(payload.message);
+
+          // ALSO add to chat history for debugging per user request, preventing spam
+          setMessages(prev => {
+            const lastMsg = prev[prev.length - 1];
+            if (lastMsg && String(lastMsg.id).startsWith('thinking-')) {
+              // Append to existing thinking message
+              return [
+                ...prev.slice(0, -1),
+                { ...lastMsg, content: lastMsg.content + "\n" + payload.message }
+              ];
+            } else {
+              return [
+                ...prev,
+                {
+                  id: `thinking-${Date.now()}`,
+                  role: 'system', // Use system role for visibility
+                  content: `> 🧠 **Thinking**: ${payload.message}`,
+                  timestamp: Date.now(),
+                }
+              ];
+            }
+          });
         } else if (payload.type === 'step_started') {
           // Show that a step is starting
           const step = payload.step;
@@ -746,6 +787,9 @@ export default function ChatPage() {
             timestamp: Date.now(),
           };
           setMessages(prev => [...prev, rejectedMsg]);
+        } else if (payload.type === 'plan_update') {
+          // Sync plan state
+          setActivePlan(payload.plan as PlanUpdate);
         } else if (payload.type === 'step_completed') {
           // Show tool output
           setPendingApproval(null); // Clear approval state
@@ -856,7 +900,7 @@ export default function ChatPage() {
     };
   }, [sessionId]);
 
-  const sendMessage = async (messageContent: string, actionContext?: any, skipUserMessage?: boolean, explicitSessionId?: string) => {
+  const sendMessage = async (messageContent: string, actionContext?: any, skipUserMessage?: boolean, explicitSessionId?: string, executionMode?: string) => {
     const targetSessionId = explicitSessionId || sessionId;
     if (!messageContent || !targetSessionId) return;
 
@@ -1226,425 +1270,541 @@ export default function ChatPage() {
               </Button>
             </div>
           </Tabs>
-
-          <div className="h-6 w-px bg-border mx-1" />
-
-          <Select value={selectedModel} onValueChange={setSelectedModel}>
-            <SelectTrigger className="h-8 w-[180px] text-xs shadow-none border-transparent hover:bg-muted/50 focus:ring-0">
-              <div className="flex items-center gap-2 truncate">
-                <span className="text-muted-foreground">Model:</span>
-                <SelectValue placeholder="Select Model" />
-              </div>
-            </SelectTrigger>
-            <SelectContent align="end">
-              {AI_MODELS.map((model) => (
-                <SelectItem key={model.value} value={model.value} className="text-xs">
-                  {model.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
 
-        {/* Chat Area */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {(!sessionId || sessionId === 'new') ? (
-              <div className="h-full flex flex-col items-center justify-center text-center space-y-6 max-w-2xl mx-auto">
-                <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/80">
-                  <Bot className="h-10 w-10 text-primary-foreground" />
+        <div className="flex-1 flex flex-row overflow-hidden relative">
+          {/* Chat Area */}
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {(!sessionId || sessionId === 'new') ? (
+                <div className="h-full flex flex-col items-center justify-center text-center space-y-6 max-w-2xl mx-auto">
+                  <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/80">
+                    <Bot className="h-10 w-10 text-primary-foreground" />
+                  </div>
+                  <div className="space-y-2">
+                    <h2 className="text-3xl font-bold tracking-tight">Welcome to AnyCowork</h2>
+                    <p className="text-lg text-muted-foreground">Your AI coworker is ready to assist you</p>
+                  </div>
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p>Type your message below to start a new conversation.</p>
+                    <p className="text-xs">A new session will be created automatically when you send your first message.</p>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <h2 className="text-3xl font-bold tracking-tight">Welcome to AnyCowork</h2>
-                  <p className="text-lg text-muted-foreground">Your AI coworker is ready to assist you</p>
-                </div>
-                <div className="text-sm text-muted-foreground space-y-2">
-                  <p>Type your message below to start a new conversation.</p>
-                  <p className="text-xs">A new session will be created automatically when you send your first message.</p>
-                </div>
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center space-y-4 text-muted-foreground">
-                <Avatar className="h-16 w-16 bg-muted/50">
-                  <AvatarFallback><Bot className="h-8 w-8" /></AvatarFallback>
-                </Avatar>
-                <div>
-                  <h3 className="font-semibold text-lg">How can I help you?</h3>
-                  <p className="text-sm">Select an agent and start chatting.</p>
-                </div>
-              </div>
-            ) : null}
-
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={cn(
-                  "flex gap-4 max-w-full",
-                  message.role === "user" && "flex-row-reverse",
-                  (message.role === "system" || message.message_type === "thinking") && "pl-8 gap-2"
-                )}
-              >
-                {/* Hide avatar for system/thinking messages */}
-                {message.role !== "system" && message.message_type !== "thinking" && (
-                  <Avatar className="h-8 w-8 shrink-0">
-                    <AvatarFallback
-                      className={cn(
-                        message.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted"
-                      )}
-                    >
-                      {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-                    </AvatarFallback>
+              ) : messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center space-y-4 text-muted-foreground">
+                  <Avatar className="h-16 w-16 bg-muted/50">
+                    <AvatarFallback><Bot className="h-8 w-8" /></AvatarFallback>
                   </Avatar>
-                )}
+                  <div>
+                    <h3 className="font-semibold text-lg">How can I help you?</h3>
+                    <p className="text-sm">Select an agent and start chatting.</p>
+                  </div>
+                </div>
+              ) : null}
 
+              {messages.map((message) => (
                 <div
+                  key={message.id}
                   className={cn(
-                    "flex-1 space-y-2 max-w-full overflow-hidden",
-                    message.role === "user" && "flex flex-col items-end"
+                    "flex gap-4 max-w-full",
+                    message.role === "user" && "flex-row-reverse",
+                    (message.role === "system" || message.message_type === "thinking") && "pl-8 gap-2"
                   )}
                 >
+                  {/* Hide avatar for system/thinking messages */}
+                  {message.role !== "system" && message.message_type !== "thinking" && (
+                    <Avatar className="h-8 w-8 shrink-0">
+                      <AvatarFallback
+                        className={cn(
+                          message.role === "user"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted"
+                        )}
+                      >
+                        {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+
                   <div
                     className={cn(
-                      "inline-block",
-                      message.role === "system" || message.message_type === "thinking"
-                        ? message.step
-                          ? "" // No background wrapper for tool execution messages
-                          : "px-3 py-1.5 text-xs text-muted-foreground bg-muted/40 border border-border/30 rounded-lg shadow-sm"
-                        : message.role === "user"
-                          ? "px-4 py-3 bg-accent text-accent-foreground border border-accent-foreground/10 rounded-2xl rounded-br-md break-words shadow-sm"
-                          : "px-4 py-3 bg-secondary text-secondary-foreground border border-border/50 rounded-2xl rounded-bl-md max-w-full overflow-hidden break-words shadow-sm"
+                      "flex-1 space-y-2 max-w-full overflow-hidden",
+                      message.role === "user" && "flex flex-col items-end"
                     )}
                   >
-                    {/* Show text content only if:
+                    <div
+                      className={cn(
+                        "inline-block",
+                        message.role === "system" || message.message_type === "thinking"
+                          ? message.step
+                            ? "" // No background wrapper for tool execution messages
+                            : "px-3 py-1.5 text-xs text-muted-foreground bg-muted/40 border border-border/30 rounded-lg shadow-sm"
+                          : message.role === "user"
+                            ? "px-4 py-3 bg-accent text-accent-foreground border border-accent-foreground/10 rounded-2xl rounded-br-md break-words shadow-sm"
+                            : "px-4 py-3 bg-secondary text-secondary-foreground border border-border/50 rounded-2xl rounded-bl-md max-w-full overflow-hidden break-words shadow-sm"
+                      )}
+                    >
+                      {/* Show text content only if:
                         1. There's no A2UI AND no Step (Action History)
                         2. Or there's meaningful text content
                     */}
-                    {message.step ? (
-                      // Compact Tool Execution Display - No background wrapper
-                      <div className="flex flex-col gap-0 max-w-2xl">
-                        {/* Compact Header - Always Visible */}
-                        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <div className={cn(
-                              "h-6 w-6 rounded-md flex items-center justify-center shrink-0",
-                              message.step.status === 'failed' || message.id.startsWith('rejected')
-                                ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
-                                : "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
-                            )}>
-                              {message.step.status === 'failed' || message.id.startsWith('rejected')
-                                ? <XCircle className="h-4 w-4" />
-                                : <CheckCircle className="h-4 w-4" />}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs font-semibold text-foreground/90 truncate">
-                                {message.step.tool_name === "filesystem" ? "📁 Filesystem" :
-                                  message.step.tool_name === "bash" ? "⚡ Command" :
-                                    message.step.tool_name === "search" ? "🔍 Search" :
-                                      "🔧 " + message.step.tool_name.replace(/_/g, ' ')}
+                      {message.step ? (
+                        // Compact Tool Execution Display - No background wrapper
+                        <div className="flex flex-col gap-0 max-w-2xl">
+                          {/* Compact Header - Always Visible */}
+                          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <div className={cn(
+                                "h-6 w-6 rounded-md flex items-center justify-center shrink-0",
+                                message.step.status === 'failed' || message.id.startsWith('rejected')
+                                  ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+                                  : "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+                              )}>
+                                {message.step.status === 'failed' || message.id.startsWith('rejected')
+                                  ? <XCircle className="h-4 w-4" />
+                                  : <CheckCircle className="h-4 w-4" />}
                               </div>
-                              <div className="text-[10px] text-muted-foreground truncate">
-                                {(() => {
-                                  // Show operation summary
-                                  const args = message.step.tool_args;
-                                  if (message.step.tool_name === "bash" && args.command) {
-                                    return args.command.substring(0, 60) + (args.command.length > 60 ? '...' : '');
-                                  } else if (message.step.tool_name === "filesystem" && args.operation) {
-                                    return `${args.operation} ${args.path || args.directory || ''}`.substring(0, 60);
-                                  } else if (message.step.tool_name === "search") {
-                                    return `${args.pattern || args.query || ''}`.substring(0, 60);
-                                  }
-                                  return Object.keys(args).slice(0, 2).join(', ');
-                                })()}
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-semibold text-foreground/90 truncate">
+                                  {message.step.tool_name === "filesystem" ? "📁 Filesystem" :
+                                    message.step.tool_name === "bash" ? "⚡ Command" :
+                                      message.step.tool_name === "search" ? "🔍 Search" :
+                                        "🔧 " + message.step.tool_name.replace(/_/g, ' ')}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground truncate">
+                                  {(() => {
+                                    // Show operation summary
+                                    const args = message.step.tool_args;
+                                    if (message.step.tool_name === "bash" && args.command) {
+                                      return args.command.substring(0, 60) + (args.command.length > 60 ? '...' : '');
+                                    } else if (message.step.tool_name === "filesystem" && args.operation) {
+                                      return `${args.operation} ${args.path || args.directory || ''}`.substring(0, 60);
+                                    } else if (message.step.tool_name === "search") {
+                                      return `${args.pattern || args.query || ''}`.substring(0, 60);
+                                    }
+                                    return Object.keys(args).slice(0, 2).join(', ');
+                                  })()}
+                                </div>
                               </div>
                             </div>
+                            <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-mono opacity-60 shrink-0">
+                              {new Date(message.timestamp).toLocaleTimeString()}
+                            </Badge>
                           </div>
-                          <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-mono opacity-60 shrink-0">
-                            {new Date(message.timestamp).toLocaleTimeString()}
-                          </Badge>
-                        </div>
 
-                        {/* Collapsible Details */}
-                        <details className="group">
-                          <summary className="flex items-center gap-2 cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2 hover:bg-muted/10 rounded-lg">
-                            <div className="transition-transform group-open:rotate-90">
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                            </div>
-                            <span>Show Details</span>
-                          </summary>
+                          {/* Collapsible Details */}
+                          <details className="group">
+                            <summary className="flex items-center gap-2 cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2 hover:bg-muted/10 rounded-lg">
+                              <div className="transition-transform group-open:rotate-90">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                              </div>
+                              <span>Show Details</span>
+                            </summary>
 
-                          <div className="px-3 py-2 space-y-2 text-xs">
-                            {/* Request Section - Collapsible */}
-                            {message.step.tool_args && Object.keys(message.step.tool_args).length > 0 && (
-                              <details className="group/req">
-                                <summary className="flex items-center gap-2 cursor-pointer font-medium text-muted-foreground hover:text-foreground py-1">
-                                  <div className="transition-transform group-open/req:rotate-90">
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            <div className="px-3 py-2 space-y-2 text-xs">
+                              {/* Request Section - Collapsible */}
+                              {message.step.tool_args && Object.keys(message.step.tool_args).length > 0 && (
+                                <details className="group/req">
+                                  <summary className="flex items-center gap-2 cursor-pointer font-medium text-muted-foreground hover:text-foreground py-1">
+                                    <div className="transition-transform group-open/req:rotate-90">
+                                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                    </div>
+                                    <span>Request Parameters</span>
+                                  </summary>
+                                  <div className="mt-1 ml-4 bg-muted/20 rounded-md p-2">
+                                    <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
+                                      {JSON.stringify(message.step.tool_args, null, 2)}
+                                    </pre>
                                   </div>
-                                  <span>Request Parameters</span>
-                                </summary>
-                                <div className="mt-1 ml-4 bg-muted/20 rounded-md p-2">
-                                  <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
-                                    {JSON.stringify(message.step.tool_args, null, 2)}
+                                </details>
+                              )}
+
+                              {/* Output Section - Collapsible */}
+                              {message.step.result && (
+                                <details className="group/out" open={message.a2uiMessages && message.a2uiMessages.length > 0}>
+                                  <summary className="flex items-center gap-2 cursor-pointer font-medium text-muted-foreground hover:text-foreground py-1">
+                                    <div className="transition-transform group-open/out:rotate-90">
+                                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                    </div>
+                                    <span>Output</span>
+                                    <Badge variant="secondary" className="text-[9px] h-4 px-1">
+                                      {message.step.result.length > 1000 ? `${(message.step.result.length / 1000).toFixed(1)}k chars` : `${message.step.result.length} chars`}
+                                    </Badge>
+                                  </summary>
+                                  <div className="mt-1 ml-4">
+                                    {message.a2uiMessages && message.a2uiMessages.length > 0 ? (
+                                      <A2UIRenderer
+                                        messages={message.a2uiMessages}
+                                        onAction={handleA2UIAction}
+                                        variant="minimal"
+                                      />
+                                    ) : (
+                                      <div className="bg-muted/20 rounded-md p-2">
+                                        <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap break-words max-h-60 overflow-y-auto">
+                                          {(() => {
+                                            try {
+                                              const parsed = JSON.parse(message.step.result);
+                                              return JSON.stringify(parsed, null, 2);
+                                            } catch {
+                                              return message.step.result;
+                                            }
+                                          })()}
+                                        </pre>
+                                      </div>
+                                    )}
+                                  </div>
+                                </details>
+                              )}
+
+                              {/* Error Section */}
+                              {message.step.error && (
+                                <div className="bg-red-50/50 dark:bg-red-950/20 rounded-md p-2">
+                                  <div className="text-[10px] font-semibold text-red-600 dark:text-red-400 mb-1 flex items-center gap-1">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    Error
+                                  </div>
+                                  <pre className="text-[10px] font-mono text-red-500 dark:text-red-400 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
+                                    {message.step.error}
                                   </pre>
                                 </div>
-                              </details>
-                            )}
-
-                            {/* Output Section - Collapsible */}
-                            {message.step.result && (
-                              <details className="group/out" open={message.a2uiMessages && message.a2uiMessages.length > 0}>
-                                <summary className="flex items-center gap-2 cursor-pointer font-medium text-muted-foreground hover:text-foreground py-1">
-                                  <div className="transition-transform group-open/out:rotate-90">
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                                  </div>
-                                  <span>Output</span>
-                                  <Badge variant="secondary" className="text-[9px] h-4 px-1">
-                                    {message.step.result.length > 1000 ? `${(message.step.result.length / 1000).toFixed(1)}k chars` : `${message.step.result.length} chars`}
-                                  </Badge>
-                                </summary>
-                                <div className="mt-1 ml-4">
-                                  {message.a2uiMessages && message.a2uiMessages.length > 0 ? (
-                                    <A2UIRenderer
-                                      messages={message.a2uiMessages}
-                                      onAction={handleA2UIAction}
-                                      variant="minimal"
-                                    />
-                                  ) : (
-                                    <div className="bg-muted/20 rounded-md p-2">
-                                      <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap break-words max-h-60 overflow-y-auto">
-                                        {(() => {
-                                          try {
-                                            const parsed = JSON.parse(message.step.result);
-                                            return JSON.stringify(parsed, null, 2);
-                                          } catch {
-                                            return message.step.result;
-                                          }
-                                        })()}
-                                      </pre>
-                                    </div>
-                                  )}
-                                </div>
-                              </details>
-                            )}
-
-                            {/* Error Section */}
-                            {message.step.error && (
-                              <div className="bg-red-50/50 dark:bg-red-950/20 rounded-md p-2">
-                                <div className="text-[10px] font-semibold text-red-600 dark:text-red-400 mb-1 flex items-center gap-1">
-                                  <AlertTriangle className="h-3 w-3" />
-                                  Error
-                                </div>
-                                <pre className="text-[10px] font-mono text-red-500 dark:text-red-400 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
-                                  {message.step.error}
-                                </pre>
-                              </div>
-                            )}
-                          </div>
-                        </details>
-                      </div>
-                    ) : (
-                      message.content && (
-                        !message.a2uiMessages ||
-                        message.a2uiMessages.length === 0 ||
-                        (message.content.trim() && message.content.length < 200)
-                      ) && (
-                        <ReactMarkdown
-                          className={cn(
-                            "prose dark:prose-invert max-w-none text-sm break-words",
-                            message.role === "user" ? "prose-p:text-accent-foreground" : "prose-p:text-secondary-foreground"
-                          )}
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            pre: ({ node, ...props }) => (
-                              <div className="overflow-x-auto w-full my-2 rounded-lg bg-black/10 dark:bg-black/30 p-2">
-                                <pre className="whitespace-pre-wrap break-words text-xs" {...props} />
-                              </div>
-                            ),
-                            code: ({ node, inline, ...props }: any) =>
-                              inline ? (
-                                <code className="bg-black/10 dark:bg-black/30 rounded px-1 py-0.5 text-xs break-all" {...props} />
-                              ) : (
-                                <code className="block whitespace-pre-wrap break-words text-xs" {...props} />
-                              )
-                          }}
-                        >
-                          {message.content}
-                        </ReactMarkdown>
-                      )
-                    )}
-                    {/* Only render A2UI separately if not part of a step (already rendered in step details) */}
-                    {message.a2uiMessages && message.a2uiMessages.length > 0 && !message.step && (
-                      <div className={cn(
-                        "w-full",
-                        message.content && message.content.trim() && message.content.length < 200 ? "mt-4" : ""
-                      )}>
-                        <A2UIRenderer
-                          messages={message.a2uiMessages}
-                          onAction={handleA2UIAction}
-                          variant="minimal"
-                        />
-                      </div>
-                    )}
-                  </div>
-                  {/* Only show timestamp for non-system messages */}
-                  {message.role !== "system" && message.message_type !== "thinking" && (
-                    <p className="text-[10px] text-muted-foreground">
-                      {message.timestamp ? new Date(message.timestamp).toLocaleTimeString() : ''}
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {/* Approval Required UI - Just the action buttons */}
-            {/* Approval Required UI */}
-            {pendingApproval && (
-              <div className="flex gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300 pl-2">
-                <Avatar className="h-8 w-8 shrink-0">
-                  <AvatarFallback className="bg-amber-100 dark:bg-amber-900 border border-amber-200 dark:border-amber-700">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col gap-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 px-4 py-3 shadow-sm max-w-[80%] min-w-[300px]">
-                  <div className="flex-1 min-w-0">
-                    {renderApprovalContent(pendingApproval)}
-                    {thinkingMessage && (
-                      <div className="mt-3 flex items-start gap-2 text-xs text-muted-foreground bg-amber-100/50 dark:bg-amber-900/20 p-2 rounded-lg border border-amber-200/50 dark:border-amber-800/50">
-                        <Bot className="h-3.5 w-3.5 mt-0.5 shrink-0 opacity-70" />
-                        <span className="italic">"{thinkingMessage}"</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-end gap-2 mt-1 pt-2 border-t border-amber-200/50 dark:border-amber-800/50">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleReject}
-                      className="gap-1 h-8 px-3 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:border-red-900 dark:hover:bg-red-950"
-                    >
-                      <XCircle className="h-3.5 w-3.5" /> Deny
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleApprove}
-                      className="gap-1 bg-green-600 hover:bg-green-700 text-white h-8 px-3 shadow-sm"
-                    >
-                      <CheckCircle className="h-3.5 w-3.5" /> Approve
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Execution Progress */}
-            {currentJob && !pendingApproval && currentJob.steps.length > 0 && (
-              <div className="flex gap-4">
-                <Avatar className="h-8 w-8 shrink-0">
-                  <AvatarFallback className="bg-muted"><Bot className="h-4 w-4" /></AvatarFallback>
-                </Avatar>
-                <div className="flex-1 max-w-md">
-                  <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Executing...
-                    </div>
-                    <div className="space-y-1">
-                      {currentJob.steps.map((step) => (
-                        <div key={step.id} className="flex items-center gap-2 text-xs">
-                          {step.status === "completed" ? (
-                            <CheckCircle className="h-3 w-3 text-green-500" />
-                          ) : step.status === "running" || step.status === "approved" ? (
-                            <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
-                          ) : step.status === "waiting_approval" ? (
-                            <Clock className="h-3 w-3 text-amber-500" />
-                          ) : step.status === "rejected" || step.status === "failed" ? (
-                            <XCircle className="h-3 w-3 text-red-500" />
-                          ) : (
-                            <Clock className="h-3 w-3 text-muted-foreground" />
-                          )}
-                          <span className={cn(
-                            step.status === "completed" && "text-muted-foreground",
-                            step.status === "rejected" || step.status === "failed" && "text-red-500"
-                          )}>
-                            {step.tool_name}
-                          </span>
+                              )}
+                            </div>
+                          </details>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Simple Loading (when no job tracking) */}
-            {isLoading && !currentJob && !pendingApproval && (
-              <div className="flex gap-4">
-                <Avatar className="h-8 w-8 shrink-0">
-                  <AvatarFallback className="bg-muted"><Bot className="h-4 w-4" /></AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col gap-2 max-w-full">
-                  <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-2 w-fit">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm text-muted-foreground">
-                      {thinkingMessage || "Thinking..."}
-                    </span>
-                  </div>
-
-                  {reasoning && (
-                    <div className="rounded-lg border bg-muted/30 max-w-2xl overflow-hidden">
-                      <div
-                        className="flex items-center gap-2 px-3 py-2 bg-muted/50 cursor-pointer hover:bg-muted/70 text-xs font-medium text-muted-foreground"
-                        onClick={() => setIsReasoningOpen(!isReasoningOpen)}
-                      >
-                        {isReasoningOpen ? (
-                          <div className="h-0 w-0 border-l-[4px] border-l-transparent border-t-[6px] border-t-muted-foreground border-r-[4px] border-r-transparent transform" />
-                        ) : (
-                          <div className="h-0 w-0 border-t-[4px] border-t-transparent border-l-[6px] border-l-muted-foreground border-b-[4px] border-b-transparent transform" />
-                        )}
-                        Thinking Process
-                      </div>
-                      {isReasoningOpen && (
-                        <div className="p-3 bg-black/5 dark:bg-black/20">
-                          <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-words font-mono">
-                            {reasoning}
-                          </pre>
+                      ) : (
+                        message.content && (
+                          !message.a2uiMessages ||
+                          message.a2uiMessages.length === 0 ||
+                          (message.content.trim() && message.content.length < 200)
+                        ) && (
+                          <ReactMarkdown
+                            className={cn(
+                              "prose dark:prose-invert max-w-none text-sm break-words",
+                              message.role === "user" ? "prose-p:text-accent-foreground" : "prose-p:text-secondary-foreground"
+                            )}
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              pre: ({ node, ...props }) => (
+                                <div className="overflow-x-auto w-full my-2 rounded-lg bg-black/10 dark:bg-black/30 p-2">
+                                  <pre className="whitespace-pre-wrap break-words text-xs" {...props} />
+                                </div>
+                              ),
+                              code: ({ node, inline, ...props }: any) =>
+                                inline ? (
+                                  <code className="bg-black/10 dark:bg-black/30 rounded px-1 py-0.5 text-xs break-all" {...props} />
+                                ) : (
+                                  <code className="block whitespace-pre-wrap break-words text-xs" {...props} />
+                                )
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                        )
+                      )}
+                      {/* Only render A2UI separately if not part of a step (already rendered in step details) */}
+                      {message.a2uiMessages && message.a2uiMessages.length > 0 && !message.step && (
+                        <div className={cn(
+                          "w-full",
+                          message.content && message.content.trim() && message.content.length < 200 ? "mt-4" : ""
+                        )}>
+                          <A2UIRenderer
+                            messages={message.a2uiMessages}
+                            onAction={handleA2UIAction}
+                            variant="minimal"
+                          />
                         </div>
                       )}
                     </div>
-                  )}
+                    {/* Only show timestamp for non-system messages */}
+                    {message.role !== "system" && message.message_type !== "thinking" && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {message.timestamp ? new Date(message.timestamp).toLocaleTimeString() : ''}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
+              ))}
+
+              {/* Approval Required UI - Just the action buttons */}
+              {/* Approval Required UI */}
+              {pendingApproval && (
+                <div className="flex gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300 pl-2">
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarFallback className="bg-amber-100 dark:bg-amber-900 border border-amber-200 dark:border-amber-700">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col gap-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 px-4 py-3 shadow-sm max-w-[80%] min-w-[300px]">
+                    <div className="flex-1 min-w-0">
+                      {renderApprovalContent(pendingApproval)}
+                      {thinkingMessage && (
+                        <div className="mt-3 flex items-start gap-2 text-xs text-muted-foreground bg-amber-100/50 dark:bg-amber-900/20 p-2 rounded-lg border border-amber-200/50 dark:border-amber-800/50">
+                          <Bot className="h-3.5 w-3.5 mt-0.5 shrink-0 opacity-70" />
+                          <span className="italic">"{thinkingMessage}"</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-end gap-2 mt-1 pt-2 border-t border-amber-200/50 dark:border-amber-800/50">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleReject}
+                        className="gap-1 h-8 px-3 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:border-red-900 dark:hover:bg-red-950"
+                      >
+                        <XCircle className="h-3.5 w-3.5" /> Deny
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleApprove}
+                        className="gap-1 bg-green-600 hover:bg-green-700 text-white h-8 px-3 shadow-sm"
+                      >
+                        <CheckCircle className="h-3.5 w-3.5" /> Approve
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Execution Progress */}
+              {currentJob && !pendingApproval && currentJob.steps.length > 0 && (
+                <div className="flex gap-4">
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarFallback className="bg-muted"><Bot className="h-4 w-4" /></AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 max-w-md">
+                    <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Executing...
+                      </div>
+                      <div className="space-y-1">
+                        {currentJob.steps.map((step) => (
+                          <div key={step.id} className="flex items-center gap-2 text-xs">
+                            {step.status === "completed" ? (
+                              <CheckCircle className="h-3 w-3 text-green-500" />
+                            ) : step.status === "running" || step.status === "approved" ? (
+                              <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+                            ) : step.status === "waiting_approval" ? (
+                              <Clock className="h-3 w-3 text-amber-500" />
+                            ) : step.status === "rejected" || step.status === "failed" ? (
+                              <XCircle className="h-3 w-3 text-red-500" />
+                            ) : (
+                              <Clock className="h-3 w-3 text-muted-foreground" />
+                            )}
+                            <span className={cn(
+                              step.status === "completed" && "text-muted-foreground",
+                              step.status === "rejected" || step.status === "failed" && "text-red-500"
+                            )}>
+                              {step.tool_name}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Simple Loading (when no job tracking) */}
+              {isLoading && !currentJob && !pendingApproval && (
+                <div className="flex gap-4">
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarFallback className="bg-muted"><Bot className="h-4 w-4" /></AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col gap-2 max-w-full">
+                    <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-2 w-fit">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm text-muted-foreground">
+                        {thinkingMessage || "Thinking..."}
+                      </span>
+                    </div>
+
+                    {reasoning && (
+                      <div className="rounded-lg border bg-muted/30 max-w-2xl overflow-hidden">
+                        <div
+                          className="flex items-center gap-2 px-3 py-2 bg-muted/50 cursor-pointer hover:bg-muted/70 text-xs font-medium text-muted-foreground"
+                          onClick={() => setIsReasoningOpen(!isReasoningOpen)}
+                        >
+                          {isReasoningOpen ? (
+                            <div className="h-0 w-0 border-l-[4px] border-l-transparent border-t-[6px] border-t-muted-foreground border-r-[4px] border-r-transparent transform" />
+                          ) : (
+                            <div className="h-0 w-0 border-t-[4px] border-t-transparent border-l-[6px] border-l-muted-foreground border-b-[4px] border-b-transparent transform" />
+                          )}
+                          Thinking Process
+                        </div>
+                        {isReasoningOpen && (
+                          <div className="p-3 bg-black/5 dark:bg-black/20">
+                            <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-words font-mono">
+                              {reasoning}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input Area - Redesigned with inline mode and model selection */}
+            <div className="p-4 bg-background/95 backdrop-blur border-t supports-[backdrop-filter]:bg-background/60">
+              <form onSubmit={handleSubmit} className="mx-auto max-w-3xl">
+                {/* Main input with send button */}
+                <div className="relative">
+                  <Textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSubmit(e);
+                      }
+                    }}
+                    placeholder="Ask anything (Ctrl+L), @ to mention, / for workflows"
+                    className="min-h-[80px] max-h-[200px] resize-none pr-12 pb-12 rounded-xl border-muted-foreground/20"
+                    disabled={isLoading}
+                    data-testid="chat-input"
+                  />
+                  <Button
+                    type="submit"
+                    size="icon"
+                    disabled={!input.trim() || isLoading}
+                    className="absolute bottom-3 right-3 h-9 w-9 rounded-lg"
+                  >
+                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  </Button>
+                </div>
+
+                {/* Mode and Model Selection - Inline at bottom of input */}
+                <div className="flex items-center gap-2 mt-2 px-1">
+                  {/* Mode Selector */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setExecutionMode(executionMode === "planning" ? "fast" : "planning")}
+                      className={cn(
+                        "group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all",
+                        "hover:bg-muted border border-transparent",
+                        executionMode === "planning"
+                          ? "bg-muted/60 text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <div className={cn(
+                        "transition-transform",
+                        executionMode === "planning" ? "" : "rotate-90"
+                      )}>
+                        {executionMode === "planning" ? (
+                          <ListTodo className="h-3.5 w-3.5" />
+                        ) : (
+                          <Zap className="h-3.5 w-3.5" />
+                        )}
+                      </div>
+                      <span className="capitalize">{executionMode}</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* Model Selector */}
+                  <Select value={selectedModel} onValueChange={setSelectedModel}>
+                    <SelectTrigger className={cn(
+                      "h-8 w-auto gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium",
+                      "border-transparent hover:bg-muted bg-muted/60",
+                      "focus:ring-0 shadow-none"
+                    )}>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-muted-foreground text-xs">
+                          {selectedModelInfo?.provider === 'gemini' ? '✨' :
+                            selectedModelInfo?.provider === 'anthropic' ? '🤖' : '🧠'}
+                        </span>
+                        <SelectValue placeholder="Select Model" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent align="start" className="max-h-80">
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                        AI Models
+                      </div>
+                      {AI_MODELS.map((model) => (
+                        <SelectItem key={model.value} value={model.value} className="text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="opacity-60">
+                              {model.provider === 'gemini' ? '✨' :
+                                model.provider === 'anthropic' ? '🤖' : '🧠'}
+                            </span>
+                            {model.label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {/* Agent Info - Right aligned */}
+                  <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Bot className="h-3 w-3" />
+                    <span className="max-w-[150px] truncate">
+                      {activeAgent?.name || 'Default Agent'}
+                    </span>
+                  </div>
+                </div>
+              </form>
+            </div>
           </div>
 
-          {/* Input Area */}
-          <div className="p-4 bg-background/95 backdrop-blur border-t supports-[backdrop-filter]:bg-background/60">
-            <form onSubmit={handleSubmit} className="mx-auto max-w-3xl relative">
-              <Textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Type your message..."
-                className="min-h-[50px] max-h-[200px] resize-none pr-12 rounded-xl"
-                disabled={isLoading}
-              />
-              <Button
-                type="submit"
-                size="icon"
-                disabled={!input.trim() || isLoading}
-                className="absolute bottom-2 right-2 h-8 w-8"
-              >
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </Button>
-            </form>
-          </div>
+          {/* Right Sidebar: Plan / Context */}
+          {activePlan && (
+            <div className={cn(
+              "border-l border-border bg-card transition-all duration-300 flex flex-col h-full",
+              isPlanOpen ? "w-80 p-4" : "w-12 py-4 items-center"
+            )}>
+              <div className="flex items-center justify-between mb-4">
+                {isPlanOpen && (
+                  <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <Clock className="w-4 h-4" /> Agent Plan
+                  </h3>
+                )}
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsPlanOpen(!isPlanOpen)}>
+                  {isPlanOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                </Button>
+              </div>
+
+              {isPlanOpen && (
+                <div className="flex flex-col gap-2 overflow-y-auto">
+                  {activePlan.tasks.map((task, idx) => (
+                    <div key={task.id || idx} className={cn(
+                      "p-3 rounded-lg border text-sm",
+                      task.status === 'running' ? "bg-accent border-accent animate-pulse" :
+                        task.status === 'completed' ? "bg-green-500/10 border-green-500/20" :
+                          task.status === 'failed' ? "bg-red-500/10 border-red-500/20" :
+                            "bg-background/50 border-border opacity-70"
+                    )}>
+                      <div className="flex items-start gap-2">
+                        <div className="mt-0.5">
+                          {task.status === 'completed' ? <CheckCircle className="w-4 h-4 text-green-500" /> :
+                            task.status === 'failed' ? <XCircle className="w-4 h-4 text-red-500" /> :
+                              task.status === 'running' ? <Loader2 className="w-4 h-4 text-primary animate-spin" /> :
+                                <div className="w-4 h-4 rounded-full border-2 border-muted" />}
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <p className={cn("font-medium leading-none", task.status === 'completed' && "line-through text-muted-foreground")}>
+                            {task.description}
+                          </p>
+                          <span className="text-xs text-muted-foreground capitalize">{task.status}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </>
   );
 }
+

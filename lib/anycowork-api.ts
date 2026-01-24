@@ -142,6 +142,18 @@ export interface FederationNode {
   capabilities?: string[];
 }
 
+// Plan & Task State (for Scratchpad)
+export interface TaskState {
+  id: string;
+  description: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  result?: string;
+}
+
+export interface PlanUpdate {
+  tasks: TaskState[];
+}
+
 export interface Session {
   id: string;
   agent_config: any;
@@ -182,8 +194,8 @@ export const anycoworkApi = {
 
   // Chat
   // Note: Rust 'chat' command returns string, not stream yet.
-  sendMessage: async (sessionId: string, message: string) => {
-    return invoke<string>('chat', { sessionId: sessionId, message });
+  sendMessage: async (sessionId: string, message: string, mode?: string) => {
+    return invoke<string>('chat', { sessionId: sessionId, message, mode });
   },
 
   approveAction: async (stepId: string) => {
