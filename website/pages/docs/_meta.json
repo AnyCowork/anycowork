@@ -1,0 +1,40 @@
+{
+  "Getting Started": {
+    "type": "separator",
+    "title": "Getting Started"
+  },
+  "index": "Introduction",
+  "getting-started": "Getting Started",
+  "desktop": "Desktop App",
+  "Core Concepts": {
+    "type": "separator",
+    "title": "Core Concepts"
+  },
+  "agents": "Agents & Coworkers",
+  "mcp": "Model Context Protocol",
+  "Architecture": {
+    "type": "separator",
+    "title": "Architecture"
+  },
+  "architecture": "System Architecture",
+  "vision": "Vision & Roadmap",
+  "Development": {
+    "type": "separator",
+    "title": "Development"
+  },
+  "build": "Build from Source",
+  "ui-design": "UI Design Guidelines",
+  "More": {
+    "type": "separator",
+    "title": "More"
+  },
+  "about-link": {
+    "title": "About AnyCowork",
+    "href": "/about"
+  },
+  "github-link": {
+    "title": "GitHub ↗",
+    "href": "https://github.com/AnyCowork/AnyCowork",
+    "newWindow": true
+  }
+}

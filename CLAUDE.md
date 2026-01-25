@@ -373,4 +373,4 @@ When working with this codebase:
 
 **Built with Tauri, Rust, and React**
 
-*Your collaborative AI assistant* • [anycowork.com](https://anycowork.com)
+*Your collaborative AI assistant* • [anycowork.com](https://www.anycowork.com)

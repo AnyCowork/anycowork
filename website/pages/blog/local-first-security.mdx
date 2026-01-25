@@ -1,0 +1,46 @@
+---
+title: "Local-First Security: Why Your AI Should Live on Your Machine"
+date: 2026-01-24
+description: "How AnyCowork protects your data through sovereignty and granular permissions"
+---
+
+Security and privacy are often treated as afterthoughts in the rush to adopt new AI tools. At AnyCowork, they are our starting point. We believe that for AI to be truly useful in professional settings, it must be fundamentally safe. This is why we adopted a **Local-First Data Storage** architecture combined with **Trusted AI Providers**.
+
+## The Risks of Cloud-Based AI
+
+When you use a standard cloud-based coding assistant, you are typically uploading snippet after snippet—sometimes entire files—to third-party servers. This raises several critical concerns:
+
+- **Data Leakage**: Sensitive API keys, proprietary algorithms, and customer data could be exposed.
+- **Compliance Issues**: GDPR, HIPAA, and other regulations often strictly control where data can be processed.
+- ** Vendor Lock-in**: You become dependent on the uptime and policy changes of a single provider.
+
+## The AnyCowork Approach: Safe by Design
+
+AnyCowork balances privacy with powerful AI through a thoughtful architecture.
+
+### 1. Local Data Storage
+All your conversations, agent configurations, and history are stored locally in SQLite on your machine. No cloud storage, no third-party databases. You own your data completely.
+
+### 2. Trusted AI Providers
+For AI inference, we partner with industry-leading, trusted providers:
+- **Google Gemini** (default) - Google's privacy policies and security
+- **OpenAI** - Established API with clear data usage terms
+- **Anthropic** - Privacy-focused AI company
+- **Local Models** (coming soon) - Run Ollama/LM Studio for **zero** data leaving your device
+
+### 3. Granular Permissions
+We've implemented a robust permission system inspired by modern mobile operating systems.
+- **File Access**: You decide which folders the agent can read or write to.
+- **Network Access**: You control which manufacturing domains the agent can contact.
+- **Command Execution**: The agent cannot run terminal commands without your specific approval.
+
+### 4. Human-in-the-Loop
+For high-stakes actions—like deleting files, pushing code to production, or executing shell scripts—AnyCowork mandates human confirmation. The AI proposes an action, explains its reasoning, and waits for your "Go" signal. This ensures that you always remain the captain of the ship.
+
+## Trust Through Transparency
+
+Because AnyCowork is **Open Source**, you don't have to take our word for it. You can audit the code, see exactly how permissions are enforced, and even build your own custom security policies.
+
+In a world of black-box AI, AnyCowork offers a glass box. You see everything, you control everything.
+
+Secure your workflow today. [Download AnyCowork](/).

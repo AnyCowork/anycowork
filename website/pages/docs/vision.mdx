@@ -1,0 +1,266 @@
+---
+title: Vision & Roadmap
+description: Vision and Roadmap for AnyCowork
+---
+
+## Vision: The Smart, Safe, & Optimized AI Coworker
+
+**Goal**: To build the ultimate open-source AI coworker powered by **Gemini 3 Pro** that lives on your device, respects your privacy, and integrates with your entire workflow.
+
+### Why Gemini 3 Pro?
+
+AnyCowork leverages **Google's Gemini 3 Pro** as its default AI model because it offers:
+
+- **Long Context Window**: 2 million tokens enable handling of entire codebases and long conversations
+- **Multimodal Intelligence**: Native support for text, code, images, and more
+- **Superior Reasoning**: Best-in-class performance on complex tasks and code generation
+- **Cost Efficiency**: Excellent performance-to-cost ratio via Google AI Studio
+- **Low Latency**: Fast response times for real-time collaboration
+
+## Core Pillars
+
+### 1. Smart: Capabilities & Extensibility
+
+AnyCowork isn't just a chatbot; it's a proactive coworker.
+
+- **SOTA Models**: First-class support for **Gemini 3 Pro** (default), **Anthropic Claude Opus/Sonnet 4.5**, and **OpenAI GPT-5**.
+- **MCP Native**: Implements the [Model Context Protocol](https://modelcontextprotocol.io) to connect to any external data source (GitHub, Google Drive, Postgres) without custom code.
+- **Skills System**: Extensible "Skills" (directories with `SKILL.md` + scripts) allow users to teach the agent new workflows.
+- **Agentic Architecture**: Uses a **Coordinator-Worker** pattern. The Coordinator plans complex tasks, and Workers execute them in parallel (future) or sequence.
+
+### 2. Safe: Safety by Design
+
+We prioritize user control and system integrity.
+
+- **Human-in-the-Loop**: Critical actions (file edits, shell commands) always require explicit user confirmation.
+- **Granular Permissions**: "Always allow read-only", "Ask for write". Users define the boundaries.
+- **Local-First Data Storage**: All conversations and configs stored locally. AI inference via trusted providers (Google, OpenAI, Anthropic).
+- **Guardrails**: System prompts include strict safety guidelines to prevent accidental data loss.
+
+### 3. Optimized: Performance & Efficiency
+
+Built for the edge, not the server farm.
+
+- **Powered by Rust & Tauri**: Extremely small binary size (under 20MB) and minimal RAM usage compared to Electron apps.
+- **Fast Mode**: Instant responses for simple queries, bypassing the heavy planning agent.
+- **Context Optimization**: Smart token management ensures long-running tasks don't blow up context windows or costs.
+- **Robust Flow**: The event-driven architecture ensures UI responsiveness even during heavy agent tasks.
+
+### 4. The "Coworker" Experience
+
+- **Delegation**: "Here's a folder, fix the docs." → Agent plans → executes → reports back.
+- **Collaboration**: Multiple specialist agents (Coder, Writer, Researcher) working together on the same task.
+- **Natural Interaction**: Chat, Telegram, or future integrations (WhatsApp, Slack, etc.)
+
+---
+
+## Development Status
+
+### Implemented (v0.1.0) - Gemini 3 Powered
+
+- [x] **Gemini 3 Pro Integration** (Default AI provider via Google AI Studio)
+- [x] **Multi-Provider Support** (OpenAI GPT-5, Anthropic Claude Opus/Sonnet 4.5)
+- [x] **Core Desktop App** (Tauri + Rust + React - native performance)
+- [x] **Agent Management** (Create, configure, chat with specialized agents)
+- [x] **Real-time Streaming** (Token-by-token responses from Gemini)
+- [x] **Chat Interface** (Message history, markdown rendering)
+- [x] **Telegram Integration** (Multi-bot support via teloxide)
+- [x] **Local SQLite Database** (Privacy-first data storage)
+- [x] **Modern UI** (Clean, intuitive design system)
+
+### In Progress (v0.2.0) - Enhanced Gemini Features
+
+- [ ] **Gemini Long Context Utilization** (Leverage 2M token context for entire codebase understanding)
+- [ ] **Multi-Modal Agent** (Image understanding, diagram generation with Gemini)
+- [ ] **Planning Agent** (Task decomposition using Gemini's advanced reasoning)
+- [ ] **Coordinator System** (Plan → Execute workflow orchestrated by Gemini)
+- [ ] **MCP Integration** (Connect Gemini to external tools and data sources)
+- [ ] **Permissions System** (AI-assisted granular tool execution approval)
+- [ ] **Snapshot/Diff System** (Track file changes with AI-generated summaries)
+- [ ] **Smart Context Management** (Intelligent token optimization using Gemini)
+
+### Planned (v0.3.0+)
+
+#### Q1 2026 - Gemini-Powered Multi-Agent System
+- [ ] **Gemini Vision Integration** (Analyze screenshots, diagrams, UI mockups)
+- [ ] **Gemini Code Execution** (Safe sandboxed code execution with Gemini)
+- [ ] **Skills System** (User-defined workflows powered by Gemini reasoning)
+- [ ] **Tool Marketplace** (Browse and install community tools, AI-recommended)
+- [ ] **Parallel Execution** (Gemini coordinates multiple agents simultaneously)
+- [ ] **Advanced Permissions** (AI-assisted per-tool, per-resource rules)
+- [ ] **Code Understanding** (Deep codebase analysis using Gemini's long context)
+
+#### Q2 2026 - Collaboration & Extensions
+- [ ] **Multi-Agent Collaboration** (Agents working together on tasks)
+- [ ] **Shared Workspaces** (Multiple users, one workspace)
+- [ ] **Cloud Sync** (Optional, encrypted)
+- [ ] **Extension Marketplace** (Browse and install community extensions)
+
+#### Q3 2026 - Extended Platforms & Gemini Everywhere
+- [ ] **Mobile Companion App** (iOS, Android with Gemini on-device)
+- [ ] **Web Interface** (Self-hosted, browser-based with Gemini Nano)
+- [ ] **CLI Tool** (Terminal-based interaction powered by Gemini)
+- [ ] **VS Code Extension** (Native editor integration with Gemini Code)
+- [ ] **Browser Extension** (Web automation, research with Gemini)
+- [ ] **Voice Interaction** (Natural voice commands via Gemini's multimodal API)
+
+#### Q4 2026 - Gemini-Powered Intelligence & Autonomy
+- [ ] **Long-term Memory** (Persistent knowledge graphs with Gemini embeddings)
+- [ ] **Learning from Feedback** (Continuous improvement using Gemini's context)
+- [ ] **Proactive Suggestions** (Gemini predicts your needs)
+- [ ] **Task Templates** (Common workflows automated by Gemini)
+- [ ] **Autonomous Workflows** (Gemini agents working independently)
+- [ ] **Predictive Assistance** (Anticipate needs before you ask)
+
+---
+
+## Architecture Evolution
+
+### Current: Single Agent (v0.1.0)
+
+User → Agent → LLM → Response
+
+### Next: Coordinator-Worker (v0.2.0)
+
+User → Coordinator → Planning Agent → Execution Plan → Worker Agents → Tools → Results
+
+### Future: Multi-Agent Collaboration (v0.3.0+)
+
+User → Primary Agent → Coordinator (Planner, Executor, Reviewer) → Final Result
+
+---
+
+## Technology Roadmap
+
+### Backend
+- **Current**: Rust, Tauri, Diesel, rig-core, teloxide
+- **Planned**:
+  - MCP client implementation (JSON-RPC)
+  - Vector database integration (Qdrant, ChromaDB)
+  - Distributed task queue (for federation)
+
+### Frontend
+- **Current**: React 19, Vite, Tailwind, shadcn/ui
+- **Planned**:
+  - Zustand (state management)
+  - React Flow (dependency visualization)
+  - CodeMirror (code editing)
+  - Monaco Editor (advanced editing)
+
+### AI & Models
+- **Current**:
+  - **Google Gemini 3 Pro** (default, via Google AI Studio)
+  - **OpenAI GPT-5** (via OpenAI API)
+  - **Anthropic Claude Opus/Sonnet 4.5** (via Anthropic API)
+- **Planned**:
+  - Local LLMs (Ollama, LM Studio)
+  - Custom fine-tuned models
+  - Multi-modal capabilities (vision, audio)
+
+---
+
+## Community & Contribution
+
+### How to Contribute
+
+We welcome contributions in many forms:
+
+- **Code**: Bug fixes, features, refactoring
+- **Documentation**: Tutorials, guides, API docs
+- **Design**: UI/UX improvements, icons, branding
+- **Testing**: Bug reports, feature requests, QA
+- **Community**: Answer questions, write blog posts
+
+See [CONTRIBUTING.md](https://github.com/anycowork/anycowork/blob/main/CONTRIBUTING.md) for guidelines.
+
+### Governance
+
+AnyCowork is an **open-source project** under the MIT License.
+
+- **Transparent Development**: All discussions happen in public (GitHub, Discord)
+- **Community-Driven**: Feature priorities guided by user needs
+- **No Vendor Lock-in**: Self-hosted, local-first, open standards
+
+---
+
+## Principles & Philosophy
+
+### Local-First
+Your data belongs to you. AnyCowork works offline and stores everything locally. Cloud features are **optional** and **encrypted**.
+
+### Privacy by Default
+No telemetry, no tracking, no data collection without explicit consent.
+
+### Interoperability
+Built on open standards (MCP, ACP) to work with any tool or service.
+
+### Safety by Design
+Human-in-the-loop by default. Agents ask before making changes.
+
+### Performance Matters
+Native Rust backend ensures low resource usage. Your AI coworker shouldn't slow down your computer.
+
+---
+
+## Gemini 3 Hackathon Submission
+
+AnyCowork is being developed for the [Gemini 3 Hackathon](https://gemini3.devpost.com/) to showcase:
+
+### Key Gemini 3 Features Utilized
+
+1. **2 Million Token Context Window**
+   - Load entire codebases for deep understanding
+   - Maintain long conversation history without truncation
+   - Cross-file refactoring and analysis
+
+2. **Multimodal Capabilities**
+   - Screenshot analysis for UI/UX feedback
+   - Diagram generation and understanding
+   - Code-to-visual and visual-to-code workflows
+
+3. **Advanced Reasoning**
+   - Complex task planning and decomposition
+   - Code review and security analysis
+   - Architectural decision support
+
+4. **Low Latency Streaming**
+   - Real-time token streaming for immediate feedback
+   - Responsive chat experience
+   - Live code generation
+
+### What Makes This Unique
+
+- **Local-First Data Storage**: All conversations and agent configs stored locally in SQLite, while leveraging trusted cloud AI providers (Google, OpenAI, Anthropic) for inference
+- **Native Performance**: Rust + Tauri for minimal resource usage
+- **Privacy by Design**: All data stored locally with optional cloud sync
+- **Multi-Provider Flexibility**: Gemini 3 Pro as default, with full support for:
+  - OpenAI GPT-5
+  - Anthropic Claude Opus/Sonnet 4.5
+  - Local LLMs (Ollama, LM Studio) - coming soon
+  - Any model via Model Context Protocol
+- **Open Source**: MIT licensed, community-driven development
+- **Model Agnostic**: Switch providers seamlessly based on task requirements
+
+## Inspirations
+
+AnyCowork draws inspiration from:
+
+- **[Google AI Studio](https://aistudio.google.com/)** - Gemini integration, prompt engineering
+- **[Anthropic Claude](https://claude.ai/)** - Safety, helpfulness, chat UX
+- **[Model Context Protocol](https://modelcontextprotocol.io)** - Tool integration
+- **[Obsidian](https://obsidian.md)** - Local-first, extensible
+- **[VS Code](https://code.visualstudio.com)** - Developer experience
+
+---
+
+## Get Involved
+
+- **GitHub**: [github.com/anycowork/anycowork](https://github.com/anycowork/anycowork)
+- **Discord**: [discord.gg/anycowork](https://discord.gg/anycowork)
+- **Twitter/X**: [@anycowork](https://twitter.com/anycowork)
+
+---
+
+**Last Updated**: 2026-01-25
+**Current Version**: 0.1.0
+**Next Milestone**: 0.2.0 (Q1 2026)

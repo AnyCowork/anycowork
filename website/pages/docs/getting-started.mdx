@@ -1,0 +1,226 @@
+---
+title: Getting Started
+description: Installation and setup guide for AnyCowork
+---
+
+Welcome to AnyCowork! This guide will help you hire your first **AI Coworker** - an intelligent assistant powered by Gemini 3 Pro that understands context, executes tasks, and works alongside you.
+
+## Installation
+
+### Quick Install
+
+Choose your platform:
+
+- **[Linux](#linux)** (AppImage, .deb)
+- **[macOS](#macos)** (.dmg, .app)
+- **[Windows](#windows)** (.exe, .msi)
+
+### Linux
+
+**AppImage** (Recommended - Universal):
+```bash
+# Download
+wget https://github.com/anycowork/anycowork/releases/latest/download/AnyCowork.AppImage
+
+# Make executable
+chmod +x AnyCowork.AppImage
+
+# Run
+./AnyCowork.AppImage
+```
+
+**Debian/Ubuntu**:
+```bash
+wget https://github.com/anycowork/anycowork/releases/latest/download/anycowork_0.1.0_amd64.deb
+sudo dpkg -i anycowork_0.1.0_amd64.deb
+```
+
+### macOS
+
+1. Download [AnyCowork.dmg](https://github.com/anycowork/anycowork/releases)
+2. Open the DMG file
+3. Drag **AnyCowork** to Applications
+4. Launch from Applications
+
+**Note**: On first launch, right-click and select "Open" to bypass the security warning.
+
+### Windows
+
+1. Download [AnyCowork-Setup.exe](https://github.com/anycowork/anycowork/releases)
+2. Run the installer
+3. Follow the setup wizard
+4. Launch from Start Menu
+
+## Initial Setup
+
+### 1. Configure API Keys
+
+AnyCowork uses **Google AI Studio** (Gemini) by default, with support for OpenAI and Anthropic:
+
+1. Open **Settings** (gear icon in sidebar)
+2. Navigate to **API Keys** tab
+3. Enter your Google AI Studio API key (or OpenAI/Anthropic)
+4. Select your preferred provider
+5. Click **Save**
+
+**Where to get API keys:**
+- **Google AI Studio** (Gemini - Default): https://aistudio.google.com/apikey
+- **OpenAI**: https://platform.openai.com/api-keys
+- **Anthropic**: https://console.anthropic.com/
+
+### 2. Create Your First AI Coworker
+
+Think of agents as specialized coworkers, each with unique skills and expertise:
+
+1. Click **Agents** in the sidebar
+2. Click **+ New Agent**
+3. Fill in the details:
+   - **Name**: e.g., "Code Assistant"
+   - **Description**: What the agent does
+   - **System Prompt**: Instructions for the agent
+4. Click **Create**
+
+**Example Coworker Profiles:**
+
+**Senior Developer Coworker**:
+```
+You are an experienced software developer coworker. You understand entire
+codebases through Gemini's 2M context window. Help with code reviews,
+architecture decisions, debugging, and refactoring. Always explain your
+reasoning and consider the broader system impact.
+```
+
+**Technical Writer Coworker**:
+```
+You are a technical writing specialist. Help create clear documentation,
+API references, and tutorials. Analyze code to understand functionality,
+then explain it in accessible language for different audiences.
+```
+
+### 3. Start Chatting
+
+1. Click on your newly created agent in the **Agents** page
+2. Type your first message in the chat input
+3. Press **Enter** or click the send button
+
+The agent will process your message and respond with helpful information!
+
+## Your AI Coworker's Capabilities
+
+### 💬 Natural Conversation
+
+- **Real-time streaming** responses from Gemini 3 Pro
+- **2M token context** - your coworker remembers entire conversations and codebases
+- **Multi-turn collaboration** with full context awareness
+- **Markdown rendering** for code, lists, and formatting
+
+### 🤖 Specialized Coworkers
+
+- Create **multiple coworkers** for different roles (developer, writer, analyst)
+- Switch between coworkers based on the task
+- Each coworker maintains their own knowledge and chat history
+- Custom expertise via system prompts
+
+### 📱 Telegram Integration
+
+Connect agents to Telegram bots:
+
+1. Create a bot via [@BotFather](https://t.me/botfather)
+2. Copy the bot token
+3. Go to **Settings** → **Telegram**
+4. Click **Add Bot**
+5. Paste token and select an agent
+6. Start the bot
+7. Message your bot on Telegram!
+
+### 🛡️ Safety Features
+
+AnyCowork prioritizes safety:
+
+- **Human-in-the-loop**: Critical actions require your approval
+- **Permission system**: Control what agents can do
+- **Local-first**: All data stored on your device
+- **No telemetry**: Your conversations stay private
+
+## Working with Your AI Coworker
+
+### Code Review Partnership
+
+1. Create a "Senior Developer" coworker
+2. Share code or entire file paths
+3. Ask: "Review this codebase for security issues and architectural improvements"
+4. Leverage Gemini's 2M context to analyze the entire project at once
+
+### Documentation Coworker
+
+1. Create a "Technical Writer" coworker
+2. Point them to your codebase
+3. Ask: "Generate API documentation for this module"
+4. Get comprehensive, well-structured documentation
+
+### Research & Analysis Coworker
+
+1. Create a "Research Analyst" coworker
+2. Ask: "Analyze this tech stack and recommend improvements"
+3. Get detailed analysis with pros/cons and migration paths
+
+## Tips & Tricks
+
+### 🎯 Writing Effective Prompts
+
+**Be specific**:
+- ❌ "Help me code"
+- ✅ "Write a Python function to sort a list of dictionaries by a specific key"
+
+**Provide context**:
+- ❌ "Fix this bug"
+- ✅ "This React component isn't re-rendering when state changes. Here's the code: ..."
+
+**Ask for format**:
+- "Explain in simple terms"
+- "Provide code examples"
+- "List pros and cons"
+
+### ⚙️ Agent Configuration
+
+**System prompts** define agent personality and capabilities:
+
+- **Role**: "You are a [role]..."
+- **Capabilities**: "You can help with X, Y, Z"
+- **Constraints**: "Always explain your reasoning"
+- **Style**: "Use a friendly, conversational tone"
+
+### 🔧 Troubleshooting
+
+**Agent not responding?**
+- Check API key is configured
+- Verify internet connection
+- Check API quota/billing
+
+**Can't start Telegram bot?**
+- Verify bot token is correct
+- Ensure bot isn't already running elsewhere
+- Check allowed chat IDs
+
+**App crashes or freezes?**
+- Check logs in `~/.local/share/anycowork/logs/` (Linux)
+- Report issues on [GitHub](https://github.com/anycowork/anycowork/issues)
+
+## Next Steps
+
+Now that you're set up, explore more:
+
+- **[Architecture](/docs/architecture)** - Understand how AnyCowork works
+- **[Building](/docs/build)** - Build from source
+- **[UI Design](/docs/ui-design)** - Contribute to the UI
+
+## Need Help?
+
+- **Documentation**: You're reading it!
+- **GitHub Issues**: [Report bugs](https://github.com/anycowork/anycowork/issues)
+- **Discussions**: [Ask questions](https://github.com/anycowork/anycowork/discussions)
+- **Discord**: [Join the community](https://discord.gg/anycowork)
+
+---
+
+Ready to dive deeper? Check out the [Architecture guide](/docs/architecture) to understand how AnyCowork's multi-agent system works under the hood.

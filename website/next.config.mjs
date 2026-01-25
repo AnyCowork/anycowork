@@ -1,19 +1,23 @@
 import nextra from 'nextra'
 
 const withNextra = nextra({
-  defaultShowCopyCode: true,
+  theme: 'nextra-theme-docs',
+  themeConfig: './theme.config.tsx',
+  staticImage: false,
   latex: true,
-})
-
-/**
- * @type {import('next').NextConfig}
- */
-const nextConfig = {
-  // Remove output: 'export' for now to test if it builds
+  flexsearch: {
+    codeblocks: false
+  },
+  defaultShowCopyCode: true,
   images: {
     unoptimized: true,
   },
-  pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
-}
+})
 
-export default withNextra(nextConfig)
+export default withNextra({
+  reactStrictMode: true,
+  eslint: {
+    // Eslint behaves weirdly in this monorepo.
+    ignoreDuringBuilds: true
+  }
+})

@@ -1,0 +1,201 @@
+---
+title: Desktop Distribution
+description: Available desktop formats and installation guide
+---
+
+Your **AI Coworker** runs natively on your desktop. AnyCowork is distributed as a native application for **Linux**, **macOS**, and **Windows**, ensuring your coworker is always available when you need them.
+
+## Available Formats
+
+### Linux
+
+- **`.deb`** - Debian/Ubuntu package
+- **`.AppImage`** - Universal Linux binary (recommended)
+- **`.rpm`** - Fedora/RHEL package (coming soon)
+
+### macOS
+
+- **`.dmg`** - macOS disk image installer
+- **`.app`** - macOS application bundle
+- **Universal Binary** - Supports both Intel and Apple Silicon
+
+### Windows
+
+- **`.exe`** - NSIS installer (recommended)
+- **`.msi`** - Windows Installer package
+
+## Installation
+
+### Linux
+
+**AppImage** (Universal):
+```bash
+# Download
+wget https://github.com/anycowork/anycowork/releases/latest/download/AnyCowork.AppImage
+
+# Make executable
+chmod +x AnyCowork.AppImage
+
+# Run
+./AnyCowork.AppImage
+```
+
+**Debian/Ubuntu** (`.deb`):
+```bash
+# Download
+wget https://github.com/anycowork/anycowork/releases/latest/download/anycowork_0.1.0_amd64.deb
+
+# Install
+sudo dpkg -i anycowork_0.1.0_amd64.deb
+
+# Fix dependencies if needed
+sudo apt-get install -f
+```
+
+### macOS
+
+1. Download `AnyCowork.dmg` from [releases](https://github.com/anycowork/anycowork/releases)
+2. Open the DMG file
+3. Drag **AnyCowork.app** to Applications folder
+4. Launch from Applications or Spotlight
+
+**Note**: First launch may show "unidentified developer" warning. Right-click the app and select "Open" to bypass.
+
+### Windows
+
+1. Download `AnyCowork-Setup.exe` from [releases](https://github.com/anycowork/anycowork/releases)
+2. Run the installer
+3. Follow the installation wizard
+4. Launch from Start Menu or Desktop shortcut
+
+## System Requirements
+
+### Minimum Requirements
+
+- **OS**:
+  - Linux: Ubuntu 20.04+ / Debian 11+ / Fedora 35+
+  - macOS: macOS 10.15 (Catalina) or later
+  - Windows: Windows 10 (1903) or later
+- **RAM**: 2GB
+- **Disk Space**: 100MB
+- **Display**: 1280x720 minimum resolution
+
+### Recommended Requirements
+
+- **OS**: Latest stable version
+- **RAM**: 4GB or more
+- **Disk Space**: 500MB (for data and logs)
+- **Display**: 1920x1080 or higher
+
+## Auto-Updates
+
+AnyCowork supports automatic updates on all platforms:
+
+- **Background checks** for new versions
+- **One-click updates** via in-app notification
+- **Delta updates** for faster downloads (where supported)
+
+To disable auto-updates:
+1. Open Settings
+2. Go to "General" tab
+3. Uncheck "Check for updates automatically"
+
+## Portable Mode
+
+AnyCowork can run in portable mode (no installation required):
+
+### Linux
+Use the **AppImage** format - no installation needed
+
+### Windows
+1. Download the portable ZIP from releases
+2. Extract to any folder
+3. Run `AnyCowork.exe`
+
+All data will be stored in the extracted folder.
+
+## Uninstallation
+
+### Linux
+
+**AppImage**:
+```bash
+rm AnyCowork.AppImage
+rm -rf ~/.config/anycowork
+rm -rf ~/.local/share/anycowork
+```
+
+**Debian/Ubuntu**:
+```bash
+sudo apt remove anycowork
+```
+
+### macOS
+
+1. Quit AnyCowork
+2. Move **AnyCowork.app** to Trash
+3. Remove data (optional):
+```bash
+rm -rf ~/Library/Application\ Support/com.anycowork.app
+rm -rf ~/Library/Caches/com.anycowork.app
+```
+
+### Windows
+
+1. Open "Add or Remove Programs"
+2. Find "AnyCowork"
+3. Click "Uninstall"
+
+Or use the uninstaller in the installation directory.
+
+## Data Storage Locations
+
+AnyCowork stores data in platform-specific locations:
+
+| Platform | Location |
+|----------|----------|
+| Linux | `~/.local/share/com.anycowork.app/` |
+| macOS | `~/Library/Application Support/com.anycowork.app/` |
+| Windows | `%APPDATA%\com.anycowork.app\` |
+
+## Building from Source
+
+See the [Building Guide](/docs/build) for instructions on building AnyCowork from source code.
+
+## Troubleshooting
+
+### Application won't start
+
+**Linux**:
+- Check if required libraries are installed: `ldd AnyCowork.AppImage`
+- Install missing dependencies via package manager
+
+**macOS**:
+- Remove app from quarantine: `xattr -d com.apple.quarantine /Applications/AnyCowork.app`
+
+**Windows**:
+- Run as administrator
+- Check Windows Event Viewer for error details
+
+### Database corruption
+
+If the app fails to start due to database issues:
+
+1. Backup your data folder
+2. Delete the database file: `anycowork.db`
+3. Restart the application (it will create a new database)
+4. Re-configure your agents and settings
+
+### Performance issues
+
+- Check CPU/RAM usage in Task Manager/Activity Monitor
+- Reduce the number of active agents
+- Clear old chat history from Settings
+- Restart the application
+
+## Support
+
+For issues and questions:
+- **GitHub Issues**: [Report bugs](https://github.com/anycowork/anycowork/issues)
+- **Discussions**: [Ask questions](https://github.com/anycowork/anycowork/discussions)
+- **Discord**: [Join the community](https://discord.gg/anycowork)

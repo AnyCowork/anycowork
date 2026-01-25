@@ -1,0 +1,308 @@
+---
+title: Building
+description: Build instructions for AnyCowork
+---
+
+Guide for building AnyCowork Tauri desktop application.
+
+## Prerequisites
+
+- **Rust**: 1.77.2+ ([rustup.rs](https://rustup.rs))
+- **Node.js**: 18+ ([nodejs.org](https://nodejs.org))
+- **System Dependencies** (Linux only):
+
+  ```bash
+  # Ubuntu/Debian
+  sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+  # Fedora
+  sudo dnf install webkit2gtk4.1-devel libappindicator-gtk3-devel librsvg2-devel
+
+  # Arch
+  sudo pacman -S webkit2gtk-4.1 libappindicator-gtk3 librsvg
+  ```
+
+## Development Mode
+
+Run backend and frontend together with hot-reload:
+
+```bash
+# Install frontend dependencies (first time only)
+cd frontend && npm install && cd ..
+
+# Run the app in dev mode
+cd src-tauri
+cargo tauri dev
+```
+
+This starts:
+- Vite dev server for frontend (hot-reload)
+- Rust backend with debug symbols
+- Native window with DevTools access
+
+**Tip**: Press `Ctrl+Shift+I` in the app window to open DevTools.
+
+## Production Build
+
+### Quick Build
+
+```bash
+npm run tauri build
+```
+
+Output location: `src-tauri/target/release/bundle/`
+
+### Build Outputs by Platform
+
+| Platform | Format | Location |
+|----------|--------|----------|
+| Linux | `.deb` | `target/release/bundle/deb/` |
+| Linux | `.AppImage` | `target/release/bundle/appimage/` |
+| macOS | `.app` | `target/release/bundle/macos/` |
+| macOS | `.dmg` | `target/release/bundle/dmg/` |
+| Windows | `.exe` | `target/release/bundle/nsis/` |
+| Windows | `.msi` | `target/release/bundle/msi/` |
+
+## Platform-Specific Instructions
+
+### Linux
+
+```bash
+# Build all Linux formats
+npm run tauri build
+
+# Build specific format
+npm run tauri build -- --bundles deb
+npm run tauri build -- --bundles appimage
+```
+
+### macOS
+
+```bash
+# Build .app and .dmg
+npm run tauri build
+
+# For Apple Silicon (M1/M2)
+npm run tauri build -- --target aarch64-apple-darwin
+
+# For Intel Macs
+npm run tauri build -- --target x86_64-apple-darwin
+
+# Universal binary (both architectures)
+npm run tauri build -- --target universal-apple-darwin
+```
+
+**Code Signing** (for distribution):
+```bash
+# Set signing identity
+export APPLE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAM_ID)"
+
+# Build with signing
+npm run tauri build
+```
+
+### Windows
+
+```bash
+# Build .exe and .msi
+npm run tauri build
+
+# Build specific format
+npm run tauri build -- --bundles nsis
+npm run tauri build -- --bundles msi
+```
+
+**Code Signing** (optional):
+```bash
+# Set certificate path and password
+set TAURI_PRIVATE_KEY=path/to/key.pfx
+set TAURI_KEY_PASSWORD=your_password
+
+npm run tauri build
+```
+
+## Cross-Compilation
+
+### Linux → Windows
+
+```bash
+# Install cross-compilation toolchain
+rustup target add x86_64-pc-windows-gnu
+sudo apt install mingw-w64
+
+# Build
+npm run tauri build -- --target x86_64-pc-windows-gnu
+```
+
+### Using Docker
+
+```bash
+# Build for Linux in Docker
+docker run --rm -v $(pwd):/app -w /app rust:latest \
+  sh -c "apt update && apt install -y libwebkit2gtk-4.1-dev && \
+         cargo tauri build"
+```
+
+## CI/CD with GitHub Actions
+
+Create `.github/workflows/build.yml`:
+
+```yaml
+name: Build Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt update
+          sudo apt install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Tauri app
+        run: npm run tauri build -- --target ${{ matrix.target }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: anycowork-${{ matrix.target }}
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/*
+```
+
+## Configuration
+
+### Tauri Configuration
+
+Edit `src-tauri/tauri.conf.json`:
+
+```json
+{
+  "identifier": "com.anycowork.app",
+  "productName": "AnyCowork",
+  "version": "0.1.0",
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
+```
+
+### App Icons
+
+Generate icons from a source image:
+
+```bash
+# Using Tauri CLI
+cargo tauri icon path/to/icon.png
+```
+
+Or manually place icons in `src-tauri/icons/`:
+- `32x32.png` - 32x32 pixels
+- `128x128.png` - 128x128 pixels
+- `128x128@2x.png` - 256x256 pixels
+- `icon.icns` - macOS icon bundle
+- `icon.ico` - Windows icon
+
+## Troubleshooting
+
+### Build Fails with Missing WebKit
+
+**Linux**: Install system dependencies (see Prerequisites).
+
+**Solution**:
+```bash
+# Ubuntu/Debian
+sudo apt install libwebkit2gtk-4.1-dev
+```
+
+### Frontend Not Loading
+
+Ensure frontend is built:
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+Check `src-tauri/tauri.conf.json` has correct `frontendDist` path.
+
+### Large Binary Size
+
+Optimize in `Cargo.toml`:
+```toml
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+```
+
+### Slow First Build
+
+First build compiles all dependencies. Subsequent builds are faster.
+
+**Tip**: Use `cargo build` separately to pre-compile Rust dependencies:
+```bash
+cd src-tauri
+cargo build --release  # Pre-compile deps
+cargo tauri build      # Much faster now
+```
+
+## Quick Reference
+
+```bash
+# Development
+cd src-tauri && cargo tauri dev
+
+# Production build
+cd src-tauri && cargo tauri build
+
+# Build specific bundle
+cd src-tauri && cargo tauri build --bundles deb
+
+# Generate icons
+cargo tauri icon source-icon.png
+
+# Check Tauri setup
+cargo tauri info
+```

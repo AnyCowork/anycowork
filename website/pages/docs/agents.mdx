@@ -1,0 +1,68 @@
+---
+title: Agents & Coworkers
+description: Creating and managing AI coworkers in AnyCowork
+---
+
+# Agents & Coworkers
+
+In AnyCowork, we use the term **Coworker** to describe an AI Agent. This isn't just a marketing term - it reflects a fundamental difference in design. A simple "chatbot" answers questions; a **Coworker** understands context, has specialized skills, and works with you to achieve goals.
+
+## The AnyCowork Agent
+
+At its core, an Agent in AnyCowork is defined by:
+
+1.  **Identity**: A name, role, and personality (System Prompt).
+2.  **Context**: Access to specific knowledge (Files, MCP Resources).
+3.  **Capabilities**: Tools it can execute (MCP Tools, Native Tools).
+4.  **Memory**: A persistent history of interactions.
+
+## Agent Types
+
+AnyCowork supports different types of agents for different workflows:
+
+### 1. Chat Agent (Standard)
+The default experience. A conversational partner that can use tools when needed. Best for brainstorming, asking questions, and simple tasks.
+
+### 2. Planning Agent (Coordinator)
+*Coming in v0.2.0*
+
+A high-level coordinator that breaks down complex requests into a plan. It then delegates steps to other agents or executes them sequentially.
+
+**Example**: "Refactor the authentication system to use JWTs."
+- **Planner**: "I need to: 1. Update schema, 2. Update backend handlers, 3. Update frontend client."
+- **Execution**: Performs each step, checking for errors along the way.
+
+## Built-in Roles
+
+AnyCowork comes with templates for common roles. You can also create your own.
+
+### 👨‍💻 Senior Developer
+- **System Prompt**: Optimized for code analysis, debugging, and architecture.
+- **Tools**: Filesystem access, Grep search, Git commands.
+- **Context**: 2M token window (Gemini 3 Pro) allows loading entire codebases.
+
+### ✍️ Technical Writer
+- **System Prompt**: Focused on clarity, structure, and documentation standards.
+- **Tools**: Markdown rendering, file reading.
+- **Usage**: "Read these source files and generate a `getting-started.md` guide."
+
+### 🔍 Research Analyst
+- **System Prompt**: adept at synthesis and unbiased analysis.
+- **Tools**: Web search (via MCP), summarization.
+
+## Creating a Custom Coworker
+
+You can create a highly specialized coworker for your specific needs.
+
+1.  Go to the **Agents** tab.
+2.  Click **+ New Agent**.
+3.  **Name**: Give them a distinct name (e.g., "SQL Expert").
+4.  **System Prompt**: This is the most crucial part. Be specific.
+    > "You are a SQL optimization expert. Your goal is to analyze queries and suggest indexes. Always explain the 'why' before showing code. Assume PostgreSQL syntax."
+5.  **Tools**: Select the tools this agent needs (e.g., Database connection, but maybe *not* web search).
+
+## Best Practices
+
+- **One Role per Agent**: Don't try to make one agent do everything. Specialized prompts perform better.
+- **Provide Context**: Use the `@` mention feature to pull in relevant files or folders into the context window.
+- **Iterate on Prompts**: If an agent isn't behaving as expected, tweet the system prompt. Treat it like coaching a human intern.

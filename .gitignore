@@ -40,3 +40,4 @@ next-env.d.ts
 src-tauri/target
 src-tauri/anycowork.db
 anycowork.db
+.next

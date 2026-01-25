@@ -1,0 +1,25 @@
+{
+  "index": {
+    "type": "page",
+    "title": "AnyCowork",
+    "display": "hidden",
+    "theme": {
+      "layout": "raw"
+    }
+  },
+  "docs": {
+    "type": "page",
+    "title": "Documentation"
+  },
+  "blog": {
+    "type": "page",
+    "title": "Blog"
+  },
+  "about": {
+    "type": "page",
+    "title": "About",
+    "theme": {
+      "typesetting": "article"
+    }
+  }
+}
