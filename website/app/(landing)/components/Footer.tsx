@@ -22,35 +22,35 @@ export default function Footer() {
               Build powerful AI agents with multi-provider support, federation, and seamless integrations.
             </p>
             <div className="footer-social">
-              <a 
-                href="https://github.com/anycowork/anycowork" 
-                target="_blank" 
+              <a
+                href="https://github.com/AnyCowork/AnyCowork"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="footer-social-link"
                 aria-label="GitHub"
               >
                 <Github size={20} />
               </a>
-              <a 
-                href="https://twitter.com/anycowork" 
-                target="_blank" 
+              <a
+                href="https://twitter.com/anycowork"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="footer-social-link"
                 aria-label="Twitter"
               >
                 <Twitter size={20} />
               </a>
-              <a 
-                href="https://discord.gg/anycowork" 
-                target="_blank" 
+              <a
+                href="https://discord.gg/anycowork"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="footer-social-link"
                 aria-label="Discord"
               >
                 <MessageCircle size={20} />
               </a>
-              <a 
-                href="mailto:hello@anycowork.com" 
+              <a
+                href="mailto:hello@anycowork.com"
                 className="footer-social-link"
                 aria-label="Email"
               >
@@ -66,7 +66,7 @@ export default function Footer() {
               <li><Link href="/features">Features</Link></li>
               <li><Link href="/pricing">Pricing</Link></li>
               <li><Link href="/docs/getting-started">Getting Started</Link></li>
-              <li><Link href="https://github.com/anycowork/anycowork/releases">Download</Link></li>
+              <li><Link href="https://github.com/AnyCowork/AnyCowork/releases">Download</Link></li>
               <li><Link href="/docs/desktop">Desktop App</Link></li>
             </ul>
           </div>
@@ -78,8 +78,8 @@ export default function Footer() {
               <li><Link href="/docs">Documentation</Link></li>
               <li><Link href="/docs/architecture">Architecture</Link></li>
               <li><Link href="/blog">Blog</Link></li>
-              <li><Link href="https://github.com/anycowork/anycowork/discussions">Community</Link></li>
-              <li><Link href="https://github.com/anycowork/anycowork/issues">Support</Link></li>
+              <li><Link href="https://github.com/AnyCowork/AnyCowork/discussions">Community</Link></li>
+              <li><Link href="https://github.com/AnyCowork/AnyCowork/issues">Support</Link></li>
             </ul>
           </div>
 
@@ -89,8 +89,8 @@ export default function Footer() {
             <ul className="footer-links">
               <li><Link href="/about">About</Link></li>
               <li><Link href="/blog">Blog</Link></li>
-              <li><Link href="https://github.com/anycowork/anycowork">GitHub</Link></li>
-              <li><Link href="https://github.com/anycowork/anycowork/blob/main/LICENSE">License</Link></li>
+              <li><Link href="https://github.com/AnyCowork/AnyCowork">GitHub</Link></li>
+              <li><Link href="https://github.com/AnyCowork/AnyCowork/blob/main/LICENSE">License</Link></li>
               <li><Link href="/privacy">Privacy</Link></li>
             </ul>
           </div>

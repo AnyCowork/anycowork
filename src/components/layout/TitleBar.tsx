@@ -1,9 +1,11 @@
 import { useEffect, useState, type PointerEvent } from "react";
-import { Minus, Square, X } from "lucide-react";
+import { Minus, Square, X, Bug } from "lucide-react";
 import { Window } from "@tauri-apps/api/window";
+import { anycoworkApi } from "@/lib/anycowork-api";
 
 export function TitleBar() {
     const [appWindow, setAppWindow] = useState<Window | null>(null);
+    const [isDevMode, setIsDevMode] = useState(false);
 
     useEffect(() => {
         import("@tauri-apps/api/window").then((module) => {
@@ -16,9 +18,14 @@ export function TitleBar() {
         });
     }, []);
 
+    useEffect(() => {
+        anycoworkApi.isDevMode().then(setIsDevMode).catch(() => setIsDevMode(false));
+    }, []);
+
     const handleMinimize = () => appWindow?.minimize();
     const handleMaximize = () => appWindow?.toggleMaximize();
     const handleClose = () => appWindow?.close();
+    const handleToggleDevtools = () => anycoworkApi.toggleDevtools();
 
     const handleDrag = (e: PointerEvent) => {
         // Only drag if the target is the container itself or explicitly strictly marked
@@ -37,15 +44,24 @@ export function TitleBar() {
         <div
             data-tauri-drag-region
             onPointerDown={handleDrag}
-            className="h-8 flex justify-between items-center bg-background border-b select-none fixed top-0 left-0 right-0 z-50 w-full cursor-default rounded-t-xl"
+            className="h-8 flex justify-between items-center bg-background border-b select-none w-full cursor-default rounded-t-xl flex-shrink-0"
         >
             <div className="flex items-center px-4 pointer-events-none">
-                <span className="text-xs font-medium text-muted-foreground">
+                <span className="text-xs font-bold text-muted-foreground">
                     AnyCowork
                 </span>
             </div>
 
             <div className="flex h-full">
+                {isDevMode && (
+                    <button
+                        onClick={handleToggleDevtools}
+                        className="inline-flex justify-center items-center h-full w-10 hover:bg-accent focus:outline-none transition-colors"
+                        title="Toggle Debug Console"
+                    >
+                        <Bug className="h-4 w-4" strokeWidth={1.5} />
+                    </button>
+                )}
                 <button
                     onClick={handleMinimize}
                     className="inline-flex justify-center items-center h-full w-10 hover:bg-accent focus:outline-none transition-colors"

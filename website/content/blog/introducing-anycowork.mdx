@@ -10,97 +10,51 @@ author: AnyCowork Team
 
 We're thrilled to introduce **AnyCowork**, an open-source platform for building collaborative AI assistants that puts you in control.
 
-## The Problem
+## The Vision: Smart, Safe, Optimized
 
-Building AI applications today means:
+Building AI applications today often means choosing between power and privacy. AnyCowork refuses to compromise.
 
-- **Vendor Lock-in** - Tied to a single AI provider
-- **Complex Infrastructure** - Managing servers, databases, APIs
-- **Limited Flexibility** - Hard to customize and extend
-- **Privacy Concerns** - Data sent to third-party services
+### 🧠 Smart
+Powered by **Gemini 3 Pro** and the **Model Context Protocol (MCP)**, AnyCowork agents understand your context deeply. The Coordinator-Worker architecture allows complex tasks to be broken down into manageable steps, executed efficiently.
 
-## Our Solution
+### 🛡️ Safe
+Your data belongs to you. AnyCowork implements **Safety by Design**:
+- **Granular Permissions**: You explicitly grant access to files and tools.
+- **Human-in-the-Loop**: Critical actions require your approval.
+- **Local-First**: Data stays on your machine, always.
 
-AnyCowork addresses these challenges with:
+### ⚡ Optimized
+Built with **Rust** and **Tauri**, providing a blazing fast experience with a minimal memory footprint. No more sluggish Electron apps eating up your RAM.
+
+## Why AnyCowork?
 
 ### Multi-Provider Support
-
 Switch between Anthropic, OpenAI, and Google with a single config change. Use the best model for each task without rewriting code.
 
-```python
-# Easy provider switching
-agent = Agent(provider="anthropic")  # or "openai", "gemini"
-```
-
 ### Local-First Architecture
-
-Your data stays on your machine. SQLite-based storage means:
-- Full control over your data
-- Works completely offline
-- Easy backups (just copy the database)
-- No cloud dependencies
-
-### Federation Capabilities
-
-Inspired by ROS2, our federation system lets you:
-- Connect multiple instances across devices
-- Distribute workloads intelligently
-- Sync in real-time
-- Scale horizontally
-
-### Extensible by Design
-
-Three ways to extend your agents:
-1. **Native Skills** - Python-based tools
-2. **Anthropic Agent Skills** - Cloud capabilities
-3. **MCP Servers** - Model Context Protocol
-
-## Who It's For
-
-AnyCowork is perfect for:
-
-- **Developers** building AI applications
-- **Teams** needing collaborative AI tools
-- **Researchers** experimenting with AI agents
-- **Companies** wanting self-hosted AI solutions
-
-## Open Source & Free
-
-We believe AI should be accessible to everyone. That's why AnyCowork is:
-
-- **MIT Licensed** - Use it however you want
-- **100% Free** - No hidden costs
-- **Community-Driven** - Built with and for the community
-- **Transparent** - See exactly how it works
-
-## What's Next
-
-We're just getting started. Coming soon:
-
-- Voice integration (wake word, speech-to-text)
-- Live Canvas for visual collaboration
-- Native mobile apps (iOS & Android)
-- Skills marketplace
+Your data stays on your machine. SQLite-based storage means full control and offline capability.
 
 ## Get Started
 
 Ready to build with AnyCowork?
 
-```bash
-pip install anycowork
-anycowork-desktop
-```
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/AnyCowork/AnyCowork.git
+   ```
 
-Or check out our [Getting Started Guide](/docs/getting-started).
+2. **Run the app**:
+   ```bash
+   cd AnyCowork
+   npm run tauri dev
+   ```
+
+Check out our [Getting Started Guide](/docs/getting-started) for full instructions.
 
 ## Join the Community
 
-- **GitHub**: [github.com/anycowork/anycowork](https://github.com/anycowork/anycowork)
+- **GitHub**: [github.com/AnyCowork/AnyCowork](https://github.com/AnyCowork/AnyCowork)
 - **Discord**: [discord.gg/anycowork](https://discord.gg/anycowork)
 - **Twitter**: [@anycowork](https://twitter.com/anycowork)
 
 We can't wait to see what you build!
-
----
-
-*Have questions or feedback? [Open an issue](https://github.com/anycowork/anycowork/issues) or join our [Discord](https://discord.gg/anycowork).*

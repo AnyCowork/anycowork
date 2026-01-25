@@ -1,6 +1,27 @@
 # Documentation
 
-Welcome to the AnyCowork documentation. Here you'll find everything you need to build powerful AI assistants.
+Welcome to the AnyCowork documentation. Here you'll find everything you need to build powerful, local-first AI assistants.
+
+## Core Pillars
+
+AnyCowork is built on three core pillars:
+
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem', marginTop: '2rem' }}>
+  <div style={{ padding: '1.5rem', border: '1px solid #E5DDD3', borderRadius: '0.5rem', backgroundColor: '#FAFAF7' }}>
+    <h3 style={{ marginTop: 0, color: '#D97757' }}>🧠 Smart</h3>
+    <p style={{ margin: 0, color: '#6B6560' }}>Powered by <strong>Gemini 3 Pro</strong> and extensible via <strong>MCP</strong> to connect with any tool.</p>
+  </div>
+
+  <div style={{ padding: '1.5rem', border: '1px solid #E5DDD3', borderRadius: '0.5rem', backgroundColor: '#FAFAF7' }}>
+    <h3 style={{ marginTop: 0, color: '#D97757' }}>🛡️ Safe</h3>
+    <p style={{ margin: 0, color: '#6B6560' }}>Safety by design with granular permissions and human-in-the-loop confirmation.</p>
+  </div>
+
+  <div style={{ padding: '1.5rem', border: '1px solid #E5DDD3', borderRadius: '0.5rem', backgroundColor: '#FAFAF7' }}>
+    <h3 style={{ marginTop: 0, color: '#D97757' }}>⚡ Optimized</h3>
+    <p style={{ margin: 0, color: '#6B6560' }}>Native <strong>Rust + Tauri</strong> application for minimal resource usage and offline capability.</p>
+  </div>
+</div>
 
 ## Quick Links
 
@@ -24,93 +45,23 @@ Welcome to the AnyCowork documentation. Here you'll find everything you need to 
     display: 'block'
   }}>
     <h3 style={{ marginTop: 0, color: '#D97757' }}>🏗️ Architecture</h3>
-    <p style={{ margin: 0, color: '#6B6560' }}>Understand how AnyCowork works</p>
+    <p style={{ margin: 0, color: '#6B6560' }}>Understand the Coordinator-Worker model</p>
   </a>
 
-  <a href="/docs/build" style={{ 
+  <a href="/docs/ui-design" style={{ 
     padding: '1.5rem', 
     border: '1px solid #E5DDD3', 
     borderRadius: '0.5rem',
     textDecoration: 'none',
     display: 'block'
   }}>
-    <h3 style={{ marginTop: 0, color: '#D97757' }}>🔨 Building</h3>
-    <p style={{ margin: 0, color: '#6B6560' }}>Build for different platforms</p>
-  </a>
-
-  <a href="/docs/desktop" style={{ 
-    padding: '1.5rem', 
-    border: '1px solid #E5DDD3', 
-    borderRadius: '0.5rem',
-    textDecoration: 'none',
-    display: 'block'
-  }}>
-    <h3 style={{ marginTop: 0, color: '#D97757' }}>💻 Desktop</h3>
-    <p style={{ margin: 0, color: '#6B6560' }}>Package as desktop application</p>
+    <h3 style={{ marginTop: 0, color: '#D97757' }}>🎨 Design System</h3>
+    <p style={{ margin: 0, color: '#6B6560' }}>UI guidelines and component patterns</p>
   </a>
 </div>
 
-## Installation
-
-### From PyPI
-
-```bash
-pip install anycowork
-anycowork-desktop
-```
-
-### From Source
-
-```bash
-git clone https://github.com/anycowork/anycowork.git
-cd anycowork
-./setup-conda.sh
-```
-
-## Core Concepts
-
-### Agents
-
-Agents are the core of AnyCowork. They process messages, use tools, and maintain conversation history.
-
-```python
-from anycowork import Agent
-
-agent = Agent(
-    provider="anthropic",
-    model="claude-sonnet-4",
-    tools=[search, calculate]
-)
-
-response = await agent.execute("What's 2+2?")
-```
-
-### Tools
-
-Tools extend agent capabilities:
-
-```python
-from anycowork import Tool
-
-@Tool
-def search_web(query: str) -> str:
-    """Search the web"""
-    return search_engine.query(query)
-```
-
-### Federation
-
-Connect multiple AnyCowork instances:
-
-```python
-from anycowork.federation import Node
-
-node = Node(name="desktop")
-node.connect_to("192.168.1.100:18790")
-```
-
 ## Need Help?
 
-- **GitHub Issues**: [Report bugs](https://github.com/anycowork/anycowork/issues)
+- **GitHub Issues**: [Report bugs](https://github.com/AnyCowork/AnyCowork/issues)
 - **Discord**: [Join the community](https://discord.gg/anycowork)
-- **Discussions**: [Ask questions](https://github.com/anycowork/anycowork/discussions)
+- **Discussions**: [Ask questions](https://github.com/AnyCowork/AnyCowork/discussions)

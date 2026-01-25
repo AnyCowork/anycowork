@@ -39,6 +39,12 @@ pub struct PermissionManager {
     pending_requests: Arc<DashMap<String, oneshot::Sender<bool>>>,
 }
 
+impl Default for PermissionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PermissionManager {
     pub fn new() -> Self {
         Self {

@@ -5,11 +5,11 @@
 The goal is to build a flexible, secure, and interactive agent system for AnyCowork. This system will allow agents to execute complex tasks using tools, while giving users granular control through a permission system. The architecture supports both single-agent and multi-agent workflows with planning and execution phases.
 
 **Core Design Goals:**
-1. **Robustness & Extensibility**: Simplify the flow while making it easier to add new capabilities.
-2. **Full Message Storage**: Store and display messages correctly and fully (custom truncation only for context window, not for storage).
-3. **Multi-Threading/Parallelism**: Allow independent tasks to run in parallel.
-4. **Multi-Agent Architecture**: Support planning agents and executing agents working together.
-5. **Security & Trust**: Granular permission system for user control.
+1. **Smart & Extensible**: Leverage SOTA models (defaulting to **Gemini 3 Pro**) for intelligence, while using **MCP** and **Skills** to extend capabilities to any external tool or messaging platform (Telegram, WhatsApp).
+2. **Robust & Scalable**: Employ a **Multi-Agent Architecture** (Planner + Workers) that supports **Parallel Execution** for independent tasks, ensuring complex workflows are handled reliably.
+3. **Safe & Trusted**: Implement "Safety by Design" via a **Granular Permission System**, rigorous **Guardrails**, and strictly enforced **Human-in-the-loop** confirmation for critical actions.
+4. **Local-First & Private**: Core logic, execution state, and data retrieval happen locally. While we use powerful cloud models for intelligence, **your data storage and orchestration logic never leave your device**.
+5. **Optimized**: Built on **Rust & Tauri** for minimal resource footprint, ensuring the "Coworker" is always available without slowing down your system.
 
 ---
 
@@ -209,54 +209,29 @@ CREATE TABLE tasks (
 
 ## Implementation Details
 
-### Refactoring Steps
+### Current Architecture
 
-1. **Refactor `save_message`**:
-   - Remove truncation from storage logic.
-   - Add `message_type` field for categorization.
-   - Store full content and metadata separately.
+1. **Coordinator (`coordinator.rs`)**:
+   - Central engine managing the `Planning -> Execution` lifecycle.
+   - **Fast Mode**: Directly instantiates `AgentLoop` for simpler queries.
+   - **Normal Mode**: Invokes `PlanningAgent` first, then executes tasks sequentially.
+   - Emits `JobStarted`, `PlanUpdate`, `JobCompleted` events.
 
-2. **Define `PlanningAgent`**:
-   - Create prompt templates for plan generation.
-   - Define Plan/Task structs and serialization.
-   - Implement planning loop with structured output.
+2. **Agent Worker (`AgentLoop` in `mod.rs`)**:
+   - Handles the execution of individual tasks (or the entire query in Fast Mode).
+   - Manages:
+     - **Context Window**: Uses `optimizations.rs` to keep history within limits.
+     - **Tool Execution**: Extracts, validates, and executes tool calls.
+     - **Snapshots**: Captures file system state before/after tool usage.
+     - **Streaming**: Simulates token streaming for "Thinking" and "Text" output.
 
-3. **Refactor `AgentLoop` to `AgentCoordinator`**:
-   - Implement the Coordinator logic.
-   - Add `run_planning_phase(user_message) -> Plan`.
-   - Add `run_execution_phase(plan)`.
-   - Integrate Planning Agent.
-   - Implement Task Dispatcher with dependency resolution.
+3. **Planning Agent (`planner.rs`)**:
+   - Dedicated agent with a planner prompt.
+   - Generates a JSON-structured `Plan` with tasks and dependencies.
 
-4. **Frontend Updates**:
-   - Handle `Plan` events and display task list.
-   - Real-time task status updates.
-   - Collapsible task details showing execution logs.
-   - Display task dependencies as a graph or list.
-
-### Agent Coordinator Functions
-
-```rust
-impl AgentCoordinator {
-    // Create execution plan
-    async fn run_planning_phase(&mut self, user_message: &str) -> Result<Plan>;
-
-    // Execute plan tasks
-    async fn run_execution_phase(&mut self, plan: &Plan) -> Result<()>;
-
-    // Dispatch single task to worker
-    async fn execute_task(&mut self, task: &TaskSpec, context: &ExecutionContext) -> Result<TaskResult>;
-
-    // Check if task dependencies are met
-    fn can_execute_task(&self, task: &TaskSpec, plan: &Plan) -> bool;
-
-    // Find all tasks ready for execution
-    fn get_ready_tasks(&self, plan: &Plan) -> Vec<&TaskSpec>;
-
-    // Update plan with task results
-    fn update_plan(&mut self, task_id: &str, result: TaskResult);
-}
-```
+4. **MCP Integration (`mcp/mod.rs`)**:
+   - `McpClient`: Connects to external tools via stdio.
+   - `McpToolAdapter`: Bridges MCP tools to the internal `Tool` trait.
 
 ---
 
@@ -278,36 +253,29 @@ impl AgentCoordinator {
 ```
 src-tauri/src/
   agents/
-    mod.rs           # Agent trait and common logic
-    coordinator.rs   # NEW: Coordinator/Engine implementation
-    planner.rs       # NEW: Planning Agent
-    executor.rs      # Executing Agent (refactored from existing)
-    processor.rs     # Stream & Logic Processor
+    mod.rs           # AgentLoop (Worker), Agent trait extensions
+    coordinator.rs   # Coordinator: Manages Planning -> Execution flow
+    planner.rs       # PlanningAgent: Generates execution plans
+    processor.rs     # StreamProcessor: Handles text/thinking token streaming
+    optimizations.rs # Context window management & optimizations
 
   mcp/               # Model Context Protocol
-    client.rs        # MCP Client implementation
-    transport.rs     # stdio/SSE transport
-    registry.rs      # Tool registry
+    mod.rs           # McpClient, McpToolAdapter, integration logic
+    types.rs         # MCP protocol JSON types
 
   permissions/
-    mod.rs           # Permission logic
-    rules.rs         # Permission rules engine
+    mod.rs           # PermissionManager & rules
 
   snapshots/         # State management
-    mod.rs           # Snapshot/checkpoint logic
+    mod.rs           # SnapshotManager (File snapshots & diffing)
 
-  models/
-    mod.rs           # Data models
-    execution.rs     # NEW: ExecutionJob, Plan, Task models
-    execution_state.rs # NEW: State management for jobs
+  models/            # Diesel Models & Data Structures
+    mod.rs
+    ...
 
-  commands/
-    agents.rs        # Tauri commands for agents
-    chat.rs          # Chat-specific commands
-
-  events.rs          # Event definitions for frontend
-  database.rs        # Database connection
-  schema.rs          # Diesel schema
+  commands/          # Tauri Commands
+    agents.rs        # Agent-related commands
+    ...
 ```
 
 ---
@@ -393,4 +361,4 @@ src-tauri/src/
 ---
 
 **Last Updated**: 2026-01-24
-**Status**: Design phase - Implementation in progress
+**Status**: Implemented / Active Development

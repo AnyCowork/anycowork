@@ -1,344 +1,42 @@
-# Building AnyCowork
+---
+title: Building
+---
 
-Quick reference for building AnyCowork in different configurations.
+# Development Workflow
 
-## Development Mode
+Guide for building and running AnyCowork locally.
 
-Run backend and frontend separately for development:
+## Prerequisites
 
-```bash
-# Terminal 1: Backend
-cd server
-python -m app.cli --ws ~/anycowork-workspace --reload
+- **Rust**: [Install Rust](https://www.rust-lang.org/tools/install)
+- **Node.js** (v18+): [Install Node.js](https://nodejs.org/)
+- **System Dependencies**: See [Tauri Prerequisites](https://tauri.app/v1/guides/getting-started/prerequisites) for your OS (e.g., `libwebkit2gtk-4.0-dev` on Linux).
 
-# Terminal 2: Frontend
-cd web
-npm run dev
-```
+## Running Locally
 
-Access at:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8080
-- API Docs: http://localhost:8080/docs
-
-## Desktop Application
-
-### Quick Build
-
-**Linux/macOS:**
-```bash
-cd server
-./build-desktop.sh
-./dist/anycowork-desktop
-```
-
-**Windows:**
-```cmd
-cd server
-build-desktop.bat
-dist\anycowork-desktop.exe
-```
-
-### Manual Build Steps
-
-1. **Build web frontend:**
+1. **Install Dependencies**
    ```bash
-   cd web
    npm install
-   npm run build
    ```
 
-2. **Copy to server static:**
+2. **Start Development Server**
    ```bash
-   cd ../server
-   rm -rf app/static/*
-   mkdir -p app/static
-   cp -r ../frontend/dist/* app/static/
+   npm run tauri dev
    ```
+   This will compile the Rust backend and launch the application window with hot-reloading enabled for the frontend.
 
-3. **Build with PyInstaller:**
-   ```bash
-   pip install pyinstaller pillow
-   pyinstaller anycowork-desktop.spec --clean --noconfirm
-   ```
+## Building for Production
 
-4. **Run:**
-   ```bash
-   ./dist/anycowork-desktop
-   ```
-
-## PyPI Package
-
-### Build Package
+To create an optimized release build:
 
 ```bash
-cd server
-
-# Ensure web build is in app/static/
-ls app/static/index.html  # Should exist
-
-# Build
-pip install build
-python -m build
-
-# Output: dist/anycowork-0.1.0.tar.gz and .whl
+npm run tauri build
 ```
-
-### Test Locally
-
-```bash
-# Create test environment
-python -m venv test-env
-source test-env/bin/activate
-
-# Install
-pip install dist/anycowork-0.1.0-py3-none-any.whl
-
-# Test
-anycowork-desktop
-
-# Clean up
-deactivate
-rm -rf test-env
-```
-
-### Publish
-
-```bash
-pip install twine
-twine upload dist/*
-```
-
-See [pypi.md](pypi.md) for detailed instructions.
-
-## Docker Container
-
-### Build Image
-
-```bash
-docker build -t anycowork:latest .
-```
-
-### Run Container
-
-```bash
-docker run -d \
-  -p 8080:8080 \
-  -p 18789:18789 \
-  -p 18790:18790 \
-  -v ~/anycowork-workspace:/workspace \
-  -e ANTHROPIC_API_KEY=sk-ant-... \
-  anycowork:latest
-```
-
-### Docker Compose
-
-```yaml
-version: '3.8'
-services:
-  anycowork:
-    build: .
-    ports:
-      - "8080:8080"
-      - "18789:18789"
-      - "18790:18790"
-    volumes:
-      - ./workspace:/workspace
-    environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - FEDERATION__ENABLED=true
-```
-
-Run:
-```bash
-docker-compose up -d
-```
-
-## Platform-Specific Packaging
-
-### Linux AppImage
-
-```bash
-# Build executable first
-cd server
-./build-desktop.sh
-
-# Create AppDir structure
-mkdir -p AnyCowork.AppDir/usr/bin
-cp dist/anycowork-desktop AnyCowork.AppDir/usr/bin/
-
-# Create .desktop file
-cat > AnyCowork.AppDir/anycowork.desktop << EOF
-[Desktop Entry]
-Name=AnyCowork
-Exec=anycowork-desktop
-Icon=anycowork
-Type=Application
-Categories=Office;
-EOF
-
-# Download appimagetool
-wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-chmod +x appimagetool-x86_64.AppImage
-
-# Build AppImage
-./appimagetool-x86_64.AppImage AnyCowork.AppDir
-```
-
-### macOS DMG
-
-```bash
-# Build .app bundle first
-cd server
-./build-desktop.sh
-
-# Create DMG
-hdiutil create -volname "AnyCowork" \
-  -srcfolder dist/AnyCowork.app \
-  -ov -format UDZO \
-  AnyCowork.dmg
-```
-
-### Windows Installer (NSIS)
-
-Create `installer.nsi`:
-```nsis
-!define APP_NAME "AnyCowork"
-!define APP_VERSION "0.1.0"
-
-Name "${APP_NAME}"
-OutFile "AnyCowork-Setup.exe"
-InstallDir "$PROGRAMFILES\${APP_NAME}"
-
-Section "Install"
-  SetOutPath "$INSTDIR"
-  File "server\dist\anycowork-desktop.exe"
-  
-  CreateDirectory "$SMPROGRAMS\${APP_NAME}"
-  CreateShortcut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\anycowork-desktop.exe"
-  CreateShortcut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\anycowork-desktop.exe"
-  
-  WriteUninstaller "$INSTDIR\Uninstall.exe"
-SectionEnd
-
-Section "Uninstall"
-  Delete "$INSTDIR\anycowork-desktop.exe"
-  Delete "$INSTDIR\Uninstall.exe"
-  Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
-  Delete "$DESKTOP\${APP_NAME}.lnk"
-  RMDir "$SMPROGRAMS\${APP_NAME}"
-  RMDir "$INSTDIR"
-SectionEnd
-```
-
-Build:
-```cmd
-makensis installer.nsi
-```
-
-## CI/CD with GitHub Actions
-
-Create `.github/workflows/build.yml`:
-
-```yaml
-name: Build Desktop App
-
-on:
-  push:
-    tags:
-      - 'v*'
-
-jobs:
-  build-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-      
-      - name: Build web
-        run: |
-          cd web
-          npm install
-          npm run build
-      
-      - name: Build desktop
-        run: |
-          cd server
-          pip install pyinstaller pillow
-          ./build-desktop.sh
-      
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: anycowork-linux
-          path: server/dist/anycowork-desktop
-
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      # Similar steps for Windows
-      
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      # Similar steps for macOS
-```
+The output artifacts (installers/executables) will be in `src-tauri/target/release/bundle/`.
 
 ## Troubleshooting
 
-### Static Files Not Found
+### Common issues
 
-Ensure web build is copied to `server/app/static/`:
-```bash
-ls server/app/static/index.html  # Should exist
-```
-
-### PyInstaller Import Errors
-
-Add missing imports to `hiddenimports` in spec file:
-```python
-hiddenimports=[
-    'uvicorn.logging',
-    'your.missing.module',
-]
-```
-
-### Large Executable Size
-
-Exclude unnecessary packages:
-```python
-excludes=[
-    'tkinter',
-    'matplotlib',
-    'numpy',
-    'pandas',
-]
-```
-
-
-## Quick Commands Reference
-
-```bash
-# Development
-./server/scripts/start_dev.sh
-
-# Build desktop app
-cd server && ./build-desktop.sh
-
-# Build PyPI package
-cd server && python -m build
-
-# Publish to PyPI
-cd server && twine upload dist/*
-
-# Run desktop app
-anycowork-desktop
-
-# Run as server
-anycowork --ws ~/workspace
-```
+- **"pkg-config" errors**: Missing system libraries. Ensure you installed the prerequisites for your OS.
+- **Frontend not updating**: Check if the Vite server is running. `npm run tauri dev` manages this automatically.

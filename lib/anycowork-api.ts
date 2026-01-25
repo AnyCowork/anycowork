@@ -444,4 +444,8 @@ export const anycoworkApi = {
     },
     defaults: {}
   }),
+
+  // Window commands
+  toggleDevtools: async () => invoke<void>('toggle_devtools'),
+  isDevMode: async () => invoke<boolean>('is_dev_mode'),
 };

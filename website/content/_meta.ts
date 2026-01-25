@@ -28,7 +28,7 @@ export default {
   },
   github: {
     title: 'GitHub',
-    href: 'https://github.com/anycowork/anycowork',
+    href: 'https://github.com/AnyCowork/AnyCowork',
     newWindow: true
   }
 }

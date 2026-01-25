@@ -5,7 +5,29 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-    { ignores: ['dist'] },
+    {
+        ignores: [
+            'dist',
+            'website/.next',
+            'website/out',
+            'node_modules',
+            '**/*.wasm',
+            '**/*.png',
+            '**/*.jpg',
+            '**/*.jpeg',
+            '**/*.gif',
+            '**/*.svg',
+            '**/*.ico',
+            '**/*.woff',
+            '**/*.woff2',
+            '**/*.ttf',
+            '**/*.eot',
+            '**/*.md',
+            '**/*.json',
+            'public/**/*',
+            'src-tauri/**/*'
+        ]
+    },
     {
         extends: [js.configs.recommended, ...tseslint.configs.recommended],
         files: ['**/*.{ts,tsx}'],
@@ -26,6 +48,9 @@ export default tseslint.config(
                 varsIgnorePattern: '^_',
                 caughtErrorsIgnorePattern: '^_'
             }],
+            '@typescript-eslint/no-empty-object-type': 'off',
+            '@typescript-eslint/ban-ts-comment': 'off',
+            '@typescript-eslint/triple-slash-reference': 'off',
         },
     },
 )

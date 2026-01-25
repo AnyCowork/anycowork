@@ -7,11 +7,11 @@
 
 AnyCowork is a native desktop AI assistant platform built with **Tauri** and **Rust**. It provides:
 
-- **Native Performance**: Rust backend with minimal resource usage
-- **AI Integration**: OpenAI GPT via rig-core framework
+- **Native Performance**: Rust backend with minimal resource usage (**Optimized**)
+- **Smart AI**: Gemini 3 Pro via rig-core & MCP integration (**Smart**)
+- **Safe Execution**: Human-in-the-loop permission system (**Safe**)
 - **Telegram Integration**: Multi-bot support with teloxide
 - **Local-First**: SQLite database with Diesel ORM
-- **Event-Driven**: Real-time communication via Tauri events
 
 ---
 

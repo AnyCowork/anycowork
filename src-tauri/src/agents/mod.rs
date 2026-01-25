@@ -240,7 +240,7 @@ impl<R: Runtime> AgentLoop<R> {
             if !valid_calls.is_empty() {
                 // Persist the Assistant's Response (with all tool calls) ONCE
                 let truncated_response = truncate_message_content(&response, "assistant");
-                save_message(&db_pool, "assistant", &response, &self.session_id, None);
+                save_message(db_pool, "assistant", &response, &self.session_id, None);
                 self.history.push(create_assistant_message(truncated_response));
 
                 for (tool_name, args, tool) in valid_calls {
@@ -275,7 +275,7 @@ impl<R: Runtime> AgentLoop<R> {
                             // Add failure to history and DB
                         let fail_msg_full = format!("Tool '{}' validation failed: {}", tool_name, fail_msg);
                         let truncated_fail_msg = truncate_message_content(&fail_msg_full, "user");
-                        save_message(&db_pool, "tool", &fail_msg_full, &self.session_id, Some(args.to_string()));
+                        save_message(db_pool, "tool", &fail_msg_full, &self.session_id, Some(args.to_string()));
                         self.history.push(create_user_message(truncated_fail_msg));
 
                         continue;
@@ -299,7 +299,7 @@ impl<R: Runtime> AgentLoop<R> {
                             // Add failure to history and DB
                             let fail_msg_full = format!("Tool '{}' validation failed: {}", tool_name, fail_msg);
                             let truncated_fail_msg = truncate_message_content(&fail_msg_full, "user");
-                            save_message(&db_pool, "tool", &fail_msg_full, &self.session_id, Some(args.to_string()));
+                            save_message(db_pool, "tool", &fail_msg_full, &self.session_id, Some(args.to_string()));
                             self.history.push(create_user_message(truncated_fail_msg));
                             continue;
                     }
@@ -375,7 +375,7 @@ impl<R: Runtime> AgentLoop<R> {
                     let truncated_tool_result = truncate_message_content(&tool_result_msg, "user");
                     
                     // IMPORTANT: Save as 'tool' role with args as metadata
-                    save_message(&db_pool, "tool", &tool_result_msg, &self.session_id, Some(args.to_string()));
+                    save_message(db_pool, "tool", &tool_result_msg, &self.session_id, Some(args.to_string()));
                     
                     self.history.push(create_user_message(truncated_tool_result));
                 }
@@ -389,7 +389,7 @@ impl<R: Runtime> AgentLoop<R> {
             // Not a tool call implies text response
             final_response_text = response.clone();
             let mut processor = StreamProcessor::new();
-            Self::stream_text(&window, &self.session_id, &response, &mut processor).await;
+            Self::stream_text(window, &self.session_id, &response, &mut processor).await;
 
             // Add to history with truncation
             let truncated_final_response = truncate_message_content(&final_response_text, "assistant");
@@ -398,7 +398,7 @@ impl<R: Runtime> AgentLoop<R> {
         }
 
         // Save to DB
-        save_message(&db_pool, "assistant", &final_response_text, &self.session_id, None);
+        save_message(db_pool, "assistant", &final_response_text, &self.session_id, None);
 
         let final_msg = if final_response_text.is_empty() {
             "Task completed successfully. All requested actions have been executed.".to_string()
@@ -456,7 +456,7 @@ impl<R: Runtime> AgentLoop<R> {
         let mut tokens = words; 
         if tokens.is_empty() && !text.is_empty() { tokens = vec![text]; }
 
-        for (_i, token) in tokens.iter().enumerate() {
+        for token in tokens.iter() {
             let chunks = processor.process(token);
             for chunk in chunks {
                 match chunk {
@@ -481,7 +481,7 @@ fn save_message(db_pool: &DbPool, role: &str, content: &str, session_id: &str, m
             role: role.to_string(),
             content: content.to_string(),
             session_id: session_id.to_string(),
-            metadata_json: metadata_json,
+            metadata_json,
             tokens: None,
         };
         let _ = diesel::insert_into(messages::table).values(&msg).execute(&mut conn);
@@ -565,33 +565,31 @@ fn extract_tool_calls(response: &str) -> Vec<Value> {
                 
                 if escape {
                     escape = false;
-                } else {
-                    if c == '\\' {
-                        escape = true;
-                    } else if c == '"' {
-                        in_string = !in_string;
-                    } else if !in_string {
-                        if c == '{' {
-                            balance += 1;
-                        } else if c == '}' {
-                            balance -= 1;
-                            if balance == 0 {
-                                // Found a balanced block [i ..= j]
-                                let candidate: String = chars[i..=j].iter().collect();
-                                if let Ok(json) = serde_json::from_str::<Value>(&candidate) {
-                                    if json.is_object() && json.get("tool").is_some() {
-                                        calls.push(json);
-                                        // Advance i to j to avoid nested parsing or re-parsing
-                                        i = j; 
-                                        break; 
-                                    }
+                } else if c == '\\' {
+                    escape = true;
+                } else if c == '"' {
+                    in_string = !in_string;
+                } else if !in_string {
+                    if c == '{' {
+                        balance += 1;
+                    } else if c == '}' {
+                        balance -= 1;
+                        if balance == 0 {
+                            // Found a balanced block [i ..= j]
+                            let candidate: String = chars[i..=j].iter().collect();
+                            if let Ok(json) = serde_json::from_str::<Value>(&candidate) {
+                                if json.is_object() && json.get("tool").is_some() {
+                                    calls.push(json);
+                                    // Advance i to j to avoid nested parsing or re-parsing
+                                    i = j; 
+                                    break; 
                                 }
-                                // If not valid JSON or not tool, just break to continue scanning from i+1?
-                                // No, if it was balanced but invalid, we treat it as text.
-                                // Actually, if we found a balanced block but it wasn't a tool, we should probably preserve i position?
-                                // But `break` here breaks the inner loop.
-                                break;
                             }
+                            // If not valid JSON or not tool, just break to continue scanning from i+1?
+                            // No, if it was balanced but invalid, we treat it as text.
+                            // Actually, if we found a balanced block but it wasn't a tool, we should probably preserve i position?
+                            // But `break` here breaks the inner loop.
+                            break;
                         }
                     }
                 }

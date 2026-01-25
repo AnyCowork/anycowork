@@ -64,7 +64,10 @@ AnyCowork Desktop (Tauri)
 │   ├── src/
 │   │   ├── lib.rs              # Main app, Tauri commands, AppState
 │   │   ├── main.rs             # Entry point
-│   │   ├── agents.rs           # AI agent execution (rig-core)
+│   │   ├── agents/             # AI Agent System
+│   │   │   ├── mod.rs          # Agent Worker Loop
+│   │   │   ├── coordinator.rs  # Agent Coordinator
+│   │   │   └── planner.rs      # Planning Agent
 │   │   ├── telegram.rs         # Telegram bot manager (teloxide)
 │   │   ├── database.rs         # Database connection pool
 │   │   ├── models.rs           # Diesel models
@@ -155,7 +158,8 @@ diesel migration revert
 ### Backend (Most Important)
 
 - `src-tauri/src/lib.rs` - Main app logic, all Tauri commands defined here
-- `src-tauri/src/agents.rs` - AI agent execution with rig-core
+- `src-tauri/src/agents/mod.rs` - Agent Worker Loop & Tool Execution
+- `src-tauri/src/agents/coordinator.rs` - Agent Coordinator (Plan -> Execute)
 - `src-tauri/src/telegram.rs` - Telegram bot manager using teloxide
 - `src-tauri/src/database.rs` - Database connection pool setup
 - `src-tauri/src/models.rs` - Diesel models (Agent, Message, TelegramConfig)

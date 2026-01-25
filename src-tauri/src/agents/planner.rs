@@ -51,11 +51,9 @@ impl PlanningAgent {
                 while let Some(chunk) = stream.next().await {
                     match chunk {
                         Ok(token) => {
-                            if let MultiTurnStreamItem::StreamAssistantItem(content) = token {
-                                if let StreamedAssistantContent::Text(t) = content {
-                                    on_token(t.text.clone());
-                                    full_response.push_str(&t.text);
-                                }
+                            if let MultiTurnStreamItem::StreamAssistantItem(StreamedAssistantContent::Text(t)) = token {
+                                on_token(t.text.clone());
+                                full_response.push_str(&t.text);
                             }
                         },
                         Err(e) => error!("Error in planning stream: {}", e),
@@ -70,11 +68,9 @@ impl PlanningAgent {
                 while let Some(chunk) = stream.next().await {
                    match chunk {
                         Ok(token) => {
-                            if let MultiTurnStreamItem::StreamAssistantItem(content) = token {
-                                if let StreamedAssistantContent::Text(t) = content {
-                                    on_token(t.text.clone());
-                                    full_response.push_str(&t.text);
-                                }
+                            if let MultiTurnStreamItem::StreamAssistantItem(StreamedAssistantContent::Text(t)) = token {
+                                on_token(t.text.clone());
+                                full_response.push_str(&t.text);
                             }
                         },
                         Err(e) => error!("Error in planning stream: {}", e),
@@ -90,11 +86,9 @@ impl PlanningAgent {
                 while let Some(chunk) = stream.next().await {
                    match chunk {
                         Ok(token) => {
-                            if let MultiTurnStreamItem::StreamAssistantItem(content) = token {
-                                if let StreamedAssistantContent::Text(t) = content {
-                                    on_token(t.text.clone());
-                                    full_response.push_str(&t.text);
-                                }
+                            if let MultiTurnStreamItem::StreamAssistantItem(StreamedAssistantContent::Text(t)) = token {
+                                on_token(t.text.clone());
+                                full_response.push_str(&t.text);
                             }
                         },
                         Err(e) => error!("Error in planning stream: {}", e),

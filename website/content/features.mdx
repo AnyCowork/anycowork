@@ -1,193 +1,43 @@
+---
+title: Features
+---
+
 # Features
 
-Discover what makes AnyCowork the perfect platform for building AI assistants.
+AnyCowork combines the power of SOTA AI models with the safety and speed of a native desktop app.
 
-## Core Features
+## Smart
 
-### Multi-Provider AI Support
+### Coordinator-Worker Agents
+Complex tasks are too hard for a single prompt. AnyCowork uses a two-stage process:
 
-Switch between different AI providers without changing your code:
+- **Planner**: Breaks down your goal into steps (e.g., "Research topic", "Write draft", "Save file").
+- **Workers**: Execute each step, reporting back results.
 
-- **Anthropic Claude** - Latest Claude Sonnet models
-- **OpenAI GPT** - GPT-4 and GPT-5 ready
-- **Google Gemini** - Gemini 2.0 Flash and beyond
+### Gemini 3 Pro Native
+We optimize for Google's Gemini 3 Pro, taking advantage of its massive context window for deep document understanding.
 
-```python
-# Switch providers with a single config change
-agent = Agent(provider="anthropic")  # or "openai", "gemini"
-```
+### MCP Extensibility
+Add new capabilities instantly by connecting [MCP Servers](https://modelcontextprotocol.io). From database access to git operations, the possibilities are endless.
 
-### Federation System
+## Safe
 
-Inspired by ROS2, AnyCowork's federation lets you:
+### Granular Permissions
+You control the keys. Decide exactly which folders an agent can read or write to.
 
-- **Connect Multiple Instances** - Link desktop, mobile, and server deployments
-- **Distribute Workloads** - Offload heavy tasks to powerful nodes
-- **Real-time Sync** - Changes propagate instantly across all nodes
-- **Offline Support** - Local-first design works without network
+- **Read-Only Mode**: Default for research tasks.
+- **Ask Permission**: The agent must ask before modifying files.
 
-```python
-# Publish to federated topic
-node.create_publisher("agent-updates")
-await pub({"agent_id": "...", "status": "active"})
+### Human-in-the-Loop
+Critical actions like executing shell commands or deleting files always trigger a confirmation card. You can Approve or Deny every single action.
 
-# Subscribe from any node
-node.create_subscriber("agent-updates", handle_update)
-```
+## Optimized
 
-### Extensible Skills System
+### Rust + Tauri
+Built on the same tech stack as high-performance terminal emulators and editors.
 
-Three ways to extend your agents:
+- **Small Binary**: Tiny download, instant startup.
+- **Low Memory**: Uses a fraction of the RAM of Electron apps.
 
-1. **Native Skills** - Python-based tools
-2. **Anthropic Agent Skills** - Cloud-based capabilities
-3. **MCP Servers** - Model Context Protocol integrations
-
-```python
-@Skill
-def custom_tool(param: str) -> str:
-    """Your custom functionality"""
-    return process(param)
-
-registry.register_skill("my-tool", custom_tool)
-```
-
-### Multi-Platform Messaging
-
-Connect your agents to popular platforms:
-
-- **Telegram** - Full bot support with commands
-- **WhatsApp** - Bridge integration
-- **Slack** - Coming soon
-- **Discord** - Coming soon
-
-### Built-in Tools
-
-Agents come with powerful built-in tools:
-
-- **File Operations** - Read, write, list files (sandboxed)
-- **Command Execution** - Run shell commands safely
-- **Web Browsing** - Playwright integration (coming soon)
-- **Canvas Tools** - Create visual workspaces
-
-### Real-time Dashboard
-
-Monitor your AI infrastructure:
-
-- Live agent status
-- Task queue visualization
-- Performance metrics
-- Federation network view
-
-### Local-First Architecture
-
-Your data, your control:
-
-- **SQLite Database** - Fast, reliable, portable
-- **No Cloud Required** - Works completely offline
-- **Easy Backup** - Just copy the database file
-- **Privacy First** - Data never leaves your machine
-
-## Developer Experience
-
-### Clean API
-
-```python
-# Simple, intuitive API
-agent = Agent(
-    provider="anthropic",
-    model="claude-sonnet-4",
-    tools=[search, calculate, browse]
-)
-
-response = await agent.execute("Research quantum computing")
-```
-
-### Type Safety
-
-Full TypeScript and Python type hints:
-
-```typescript
-interface AgentConfig {
-  provider: 'anthropic' | 'openai' | 'gemini'
-  model: string
-  tools?: Tool[]
-}
-```
-
-### Comprehensive Documentation
-
-- Step-by-step guides
-- API reference
-- Architecture deep-dives
-- Example projects
-
-### Active Development
-
-- Regular updates
-- Community-driven features
-- Responsive maintainers
-- Open roadmap
-
-## Enterprise Features
-
-### Security
-
-- Sandboxed tool execution
-- API key management
-- Input validation
-- SQL injection prevention
-
-### Scalability
-
-- Async throughout
-- Connection pooling
-- Efficient caching
-- Horizontal scaling ready
-
-### Monitoring
-
-- Structured logging
-- Error tracking
-- Performance metrics
-- Custom alerts
-
-## Coming Soon
-
-### Voice Integration
-
-- Wake word detection
-- Speech-to-text
-- Text-to-speech (ElevenLabs)
-- Continuous conversation mode
-
-### Live Canvas
-
-- Agent-driven visual workspace
-- A2UI integration
-- Real-time collaboration
-- Export to multiple formats
-
-### Mobile Apps
-
-- Native iOS app (SwiftUI)
-- Native Android app (Jetpack Compose)
-- Widgets and shortcuts
-- Push notifications
-
-### Skills Marketplace
-
-- Discover community skills
-- One-click installation
-- Skill ratings and reviews
-- Revenue sharing for creators
-
-## Get Started
-
-Ready to build with AnyCowork?
-
-<div style={{ marginTop: '2rem' }}>
-  <a href="/docs/getting-started" className="btn-primary">
-    Get Started →
-  </a>
-</div>
+### Offline-First
+Your chat history, settings, and vector database live on your disk. You can view past conversations and search your local knowledge base without an internet connection.

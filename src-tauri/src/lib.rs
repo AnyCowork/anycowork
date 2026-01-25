@@ -17,8 +17,6 @@ use dashmap::DashMap;
 use telegram::TelegramBotManager;
 use permissions::PermissionManager;
 
-use tauri::Manager; // Import Manager trait
-
 // AppState definition
 pub struct AppState {
     pub db_pool: DbPool,
@@ -58,15 +56,7 @@ pub fn run() {
             telegram_manager,
             permission_manager,
         })
-        .setup(move |app| {
-            // Open devtools for all windows in debug mode
-            #[cfg(debug_assertions)] 
-            {
-                for window in app.webview_windows().values() {
-                    window.open_devtools();
-                }
-            }
-
+        .setup(move |_app| {
             // Start all active Telegram bots on app startup
             let manager = telegram_manager_clone.clone();
             tauri::async_runtime::spawn(async move {
@@ -125,7 +115,10 @@ pub fn run() {
             commands::create_skill,
             commands::update_skill,
             commands::delete_skill,
-            commands::toggle_skill
+            commands::toggle_skill,
+            // Window commands
+            commands::toggle_devtools,
+            commands::is_dev_mode
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

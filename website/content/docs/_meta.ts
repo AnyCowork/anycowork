@@ -4,8 +4,8 @@ export default {
   architecture: 'Architecture',
   build: 'Building',
   desktop: 'Desktop Distribution',
-  pypi: 'PyPI Publishing',
+
   'ui-design': 'UI Design',
-  progress: 'Progress & Roadmap',
+
   'anthropic-skills': 'Anthropic Skills'
 }

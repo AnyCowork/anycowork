@@ -10,6 +10,12 @@ pub struct StreamProcessor {
     buffer: String,
 }
 
+impl Default for StreamProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StreamProcessor {
     pub fn new() -> Self {
         Self {
@@ -51,30 +57,28 @@ impl StreamProcessor {
                     }
                     break;
                 }
-            } else {
-                if let Some(start_idx) = self.buffer.find("<think>") {
-                    // Found start of thinking
-                    let text_content = self.buffer[..start_idx].to_string();
-                    if !text_content.is_empty() {
-                        chunks.push(StreamChunk::Text(text_content));
-                    }
-                    self.buffer = self.buffer[start_idx + 7..].to_string();
-                    self.in_thinking_block = true;
-                } else {
-                    // No thinking tag, all text
-                    // But wait, what if "<th" is at the end?
-                    // We need to keep potential partial tag.
-                    if self.buffer.ends_with("<") || self.buffer.ends_with("<t") || self.buffer.ends_with("<th") || self.buffer.ends_with("<thi") || self.buffer.ends_with("<thin") || self.buffer.ends_with("<think") {
-                         // Keep in buffer wait for next token
-                         break;
-                    }
-                    
-                    if !self.buffer.is_empty() {
-                        chunks.push(StreamChunk::Text(self.buffer.clone()));
-                        self.buffer.clear();
-                    }
-                    break;
+            } else if let Some(start_idx) = self.buffer.find("<think>") {
+                // Found start of thinking
+                let text_content = self.buffer[..start_idx].to_string();
+                if !text_content.is_empty() {
+                    chunks.push(StreamChunk::Text(text_content));
                 }
+                self.buffer = self.buffer[start_idx + 7..].to_string();
+                self.in_thinking_block = true;
+            } else {
+                // No thinking tag, all text
+                // But wait, what if "<th" is at the end?
+                // We need to keep potential partial tag.
+                if self.buffer.ends_with("<") || self.buffer.ends_with("<t") || self.buffer.ends_with("<th") || self.buffer.ends_with("<thi") || self.buffer.ends_with("<thin") || self.buffer.ends_with("<think") {
+                     // Keep in buffer wait for next token
+                     break;
+                }
+                
+                if !self.buffer.is_empty() {
+                    chunks.push(StreamChunk::Text(self.buffer.clone()));
+                    self.buffer.clear();
+                }
+                break;
             }
         }
         

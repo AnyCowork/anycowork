@@ -49,7 +49,7 @@ const bottomNavigation: NavItem[] = [
 
 export function Sidebar() {
   const location = useLocation();
-  const [isCollapsed, setIsCollapsed] = React.useState(false);
+  const [isCollapsed, setIsCollapsed] = React.useState(true);
 
   return (
     <div
@@ -100,15 +100,10 @@ export function Sidebar() {
       )}
 
       {/* Navigation Groups */}
-      <nav className="flex-1 overflow-y-auto px-2 space-y-6">
+      <nav className="flex-1 overflow-y-auto px-2 space-y-6 pt-2">
 
         {/* Workspace */}
         <div className="space-y-1">
-          {!isCollapsed && (
-            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider overflow-hidden whitespace-nowrap">
-              Workspace
-            </div>
-          )}
           {workspaceNavigation.map((item) => {
             const isActive = location.pathname === item.href ||
               (item.href === "/chat" && location.pathname.startsWith("/chat"));

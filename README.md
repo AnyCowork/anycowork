@@ -1,6 +1,12 @@
-# AnyCowork
+# AnyCowork: The Smart, Safe, & Optimized AI Coworker
 
-**AnyCowork** is an open-source collaborative AI assistant platform built with **Tauri** and **Rust**. It provides a native desktop experience with a React frontend, featuring agentic workflows, multi-platform connectivity (including Telegram), and a "Local-First" philosophy.
+**AnyCowork** is an open-source, **local-first** AI coworker that lives on your desktop. Built with **Tauri and Rust** for performance, it uses **Coordinator-Worker** agents to help you accomplish complex tasks safely and efficiently.
+
+## Core Pillars
+
+- 🧠 **Smart**: Powered by **Gemini 3 Pro** (and other SOTA models), extensible via **MCP** (Model Context Protocol), and customizable with Skills.
+- 🛡️ **Safe**: **Safety by Design**. Granular permissions, human-in-the-loop confirmation for sensitive actions, and strict guardrails.
+- ⚡ **Optimized**: **Rust + Tauri** means <20MB binary size, minimal RAM usage, and instant performance. No Electron bloat.
 
 ## Quick Start
 
@@ -159,26 +165,22 @@ anycowork/
 └── docs/                    # Documentation
 ```
 
-## Features
+## Why AnyCowork?
 
-### Core Features
-- **Native Desktop App**: Built with Tauri for fast, lightweight performance
-- **AI-Powered Agents**: Create and manage AI agents with custom system prompts
-- **Telegram Integration**: Connect agents to Telegram bots using teloxide
-- **Local-First**: All data stored locally in SQLite
-- **Real-time Events**: Event-driven architecture with approval workflows
+### 🧠 Smart & Agentic
+- **Coordinator-Worker Architecture**: A "Planner" breaks down goals, and "Workers" execute them.
+- **MCP Native**: Connect to GitHub, Postgres, Local Files, and more using standard [MCP Servers](https://modelcontextprotocol.io).
+- **Proactive Skills**: Teach your agent new workflows by adding `SKILL.md` guides.
 
-### Telegram Bot Integration
-- Create multiple Telegram bot configurations
-- Link bots to specific agents
-- Control bot lifecycle (start/stop)
-- Chat filtering by allowed chat IDs
+### 🛡️ Safe & Secure
+- **Permission Manager**: You decide what the agent can read or write.
+- **Confirmation Loops**: The agent asks before running shell commands or editing critical files.
+- **Local Data**: Chat history and vector indices live in `~/.local/share/anycowork`. Your data, your rules.
 
-### Agent System
-- Custom system prompts
-- Conversation history
-- Tool execution with approval workflow
-- Streaming responses
+### ⚡ Optimized for Desktops
+- **Native Performance**: Built on Rust. Blazing fast, lightweight, and efficient.
+- **Fast Mode**: Instant chat for quick questions, bypassing the heavy planner.
+- **Offline First**: Core functionality works without internet (except API calls).
 
 ## Technology Stack
 

@@ -64,10 +64,7 @@ impl<R: Runtime> Tool<R> for FilesystemTool {
         // Security check moved to validate_args
 
         // Permission check for write operations
-        let requires_approval = match op {
-            "write_file" | "delete_file" | "make_dir" | "read_file" | "list_dir" => true,
-            _ => false,
-        };
+        let requires_approval = matches!(op, "write_file" | "delete_file" | "make_dir" | "read_file" | "list_dir");
 
         if requires_approval {
             let perm_req = PermissionRequest {
@@ -108,19 +105,17 @@ impl<R: Runtime> Tool<R> for FilesystemTool {
             "list_dir" => {
                 let entries = fs::read_dir(target_path).map_err(|e| e.to_string())?;
                 let mut items = Vec::new();
-                for entry in entries {
-                    if let Ok(e) = entry {
-                        let name = e.file_name().to_string_lossy().to_string();
-                        let file_type = if e.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                            "directory"
-                        } else {
-                            "file"
-                        };
-                        items.push(json!({
-                            "name": name,
-                            "type": file_type
-                        }));
-                    }
+                for e in entries.flatten() {
+                    let name = e.file_name().to_string_lossy().to_string();
+                    let file_type = if e.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                        "directory"
+                    } else {
+                        "file"
+                    };
+                    items.push(json!({
+                        "name": name,
+                        "type": file_type
+                    }));
                 }
                 Ok(json!(items))
             },

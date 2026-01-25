@@ -427,6 +427,33 @@ Based on 4px base unit:
 ">
   Error
 </span>
+### Safety & Permissions
+
+```tsx
+// Permission Request Card
+<div className="
+  bg-white border border-[#E5DDD3]
+  rounded-xl overflow-hidden
+  shadow-sm
+">
+  <div className="bg-[#F5EFE7] px-4 py-3 border-b border-[#E5DDD3] flex items-center gap-2">
+    <ShieldIcon className="w-4 h-4 text-[#D97757]" />
+    <span className="text-sm font-semibold text-[#2C2825]">Permission Required</span>
+  </div>
+  <div className="p-4">
+    <p className="text-sm text-[#2C2825] mb-3">
+      The agent wants to execute: <code className="bg-[#EDE7DF] px-1.5 py-0.5 rounded text-[#6B6560]">rm -rf ./temp</code>
+    </p>
+    <div className="flex gap-2">
+      <button className="px-3 py-1.5 bg-[#D97757] text-white text-sm rounded-lg font-medium">
+        Approve
+      </button>
+      <button className="px-3 py-1.5 border border-[#D6CFC5] text-[#2C2825] text-sm rounded-lg">
+        Deny
+      </button>
+    </div>
+  </div>
+</div>
 ```
 
 ### Avatar Component

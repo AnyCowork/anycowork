@@ -1,98 +1,81 @@
+---
+title: Getting Started
+---
+
 # Getting Started
 
 Get up and running with AnyCowork in minutes.
 
-## Installation Options
+## Prerequisites
 
-### Option 1: Install from PyPI (Recommended)
+- **Rust** (1.77.2+)
+- **Node.js** (18+)
+- **pnpm** or **npm**
 
-The easiest way to get started:
+## Installation
 
-```bash
-# Install
-pip install anycowork
-
-# Run as desktop app
-anycowork-desktop
-
-# Or run as server
-anycowork --ws ~/anycowork-workspace
-```
-
-### Option 2: Standalone Executable
-
-Download pre-built executables from [GitHub Releases](https://github.com/anycowork/anycowork/releases):
-
-- **Windows**: `anycowork-desktop.exe`
-- **macOS**: `AnyCowork.app`
-- **Linux**: `anycowork-desktop`
-
-### Option 3: Development Setup
-
-For contributors and developers:
-
-#### Prerequisites
-
-- Conda (Miniconda or Anaconda)
-- Node.js 18+
-
-#### Setup Steps
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/anycowork/anycowork.git
-   cd anycowork
-   ```
-
-2. Initialize the environment:
-   ```bash
-   ./setup-conda.sh
-   ```
-
-3. Configure your API keys:
-   - Edit the `.env` file in your workspace (default: `~/anycowork-workspace/.env`)
-   - Add your `ANTHROPIC_API_KEY` (or OpenAI/Gemini keys)
-
-4. Run the development server:
-   ```bash
-   ./server/scripts/start_dev.sh
-   ```
-
-## Access Points
-
-Once running, you can access:
-
-- **Frontend**: [http://localhost:3000](http://localhost:3000)
-- **Backend API**: [http://localhost:8080](http://localhost:8080)
-- **API Docs**: [http://localhost:8080/docs](http://localhost:8080/docs)
-
-## Configuration
-
-### API Keys
-
-AnyCowork supports multiple AI providers. Configure them in your `.env` file:
+### 1. Clone the Repository
 
 ```bash
-# Anthropic (Claude)
-ANTHROPIC_API_KEY=your_key_here
-
-# OpenAI (GPT)
-OPENAI_API_KEY=your_key_here
-
-# Google (Gemini)
-GOOGLE_API_KEY=your_key_here
+git clone https://github.com/AnyCowork/AnyCowork.git
+cd anycowork
 ```
 
-### Workspace
-
-By default, AnyCowork stores data in `~/anycowork-workspace`. You can change this:
+### 2. Install Dependencies
 
 ```bash
-anycowork --ws /path/to/your/workspace
+# Install frontend dependencies
+npm install
+
+# (Optional) Install website dependencies if you want to run the docs
+cd website && npm install && cd ..
 ```
 
-## Next Steps
+### 3. Setup Environment
 
-- Learn about the [Architecture](/docs/architecture)
-- Explore [Building](/docs/build) for different platforms
-- Check the [Progress & Roadmap](/docs/progress) for upcoming features
+Create a `.env` file in the root directory:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and add your API keys:
+
+```env
+OPENAI_API_KEY=sk-...
+# Optional: Add other keys as needed
+```
+
+### 4. Run the Application
+
+Start the development server:
+
+```bash
+npm run tauri dev
+```
+
+This will:
+1. Compile the Rust backend (this may take a few minutes the first time).
+2. Start the Vite frontend server.
+3. Launch the AnyCowork desktop application window.
+
+## Usage Guide
+
+### First Steps
+
+1. **Create an Agent**: Click the "New Agent" button in the sidebar. Give it a name like "Research Assistant".
+2. **Chat**: Start a conversation. Try asking "Can you summarize the README file in this folder?".
+3. **Permissions**: When the agent tries to read a file, a permission card will appear. Click "Approve" to proceed.
+4. **Tools**: The agent can use tools like `read_file`, `search_web`, and `run_command` (if enabled).
+
+### Architecture Overview
+
+AnyCowork runs entirely on your machine (Local-First).
+- **Frontend**: React + Vite (Port 1420)
+- **Backend**: Rust + Tauri (IPC)
+- **Database**: SQLite (`~/.local/share/com.anycowork.app/anycowork.db`)
+
+## Troubleshooting
+
+- **Build Fails**: Ensure you have the latest Rust version: `rustup update`.
+- **Missing Dependencies**: On Linux, you may need system libraries like `libwebkit2gtk-4.0-dev`. See [Tauri Prerequisites](https://tauri.app/v1/guides/getting-started/prerequisites).

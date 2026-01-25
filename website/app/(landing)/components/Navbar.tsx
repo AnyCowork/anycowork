@@ -21,9 +21,9 @@ export default function Navbar() {
           <Link href="/docs" className="navbar-link">Docs</Link>
           <Link href="/blog" className="navbar-link">Blog</Link>
           <Link href="/pricing" className="navbar-link">Pricing</Link>
-          <a 
-            href="https://github.com/anycowork/anycowork" 
-            target="_blank" 
+          <a
+            href="https://github.com/AnyCowork/AnyCowork"
+            target="_blank"
             rel="noopener noreferrer"
             className="navbar-link"
           >
@@ -35,7 +35,7 @@ export default function Navbar() {
         </div>
 
         {/* Mobile Menu Button */}
-        <button 
+        <button
           className="navbar-mobile-toggle"
           onClick={() => setIsMenuOpen(!isMenuOpen)}
           aria-label="Toggle menu"
@@ -59,17 +59,17 @@ export default function Navbar() {
           <Link href="/pricing" className="navbar-mobile-link" onClick={() => setIsMenuOpen(false)}>
             Pricing
           </Link>
-          <a 
-            href="https://github.com/anycowork/anycowork" 
-            target="_blank" 
+          <a
+            href="https://github.com/AnyCowork/AnyCowork"
+            target="_blank"
             rel="noopener noreferrer"
             className="navbar-mobile-link"
             onClick={() => setIsMenuOpen(false)}
           >
             GitHub
           </a>
-          <Link 
-            href="/docs/getting-started" 
+          <Link
+            href="/docs/getting-started"
             className="navbar-mobile-cta"
             onClick={() => setIsMenuOpen(false)}
           >

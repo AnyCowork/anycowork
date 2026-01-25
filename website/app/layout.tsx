@@ -17,7 +17,7 @@ export default function RootLayout({
         <link rel="icon" type="image/svg+xml" href="/logo.svg" />
         <link rel="alternate icon" href="/favicon.ico" />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         {children}
       </body>
     </html>

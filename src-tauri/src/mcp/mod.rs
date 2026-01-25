@@ -142,6 +142,12 @@ pub struct ToolRegistry<R: Runtime> {
     tools: HashMap<String, Box<dyn Tool<R>>>,
 }
 
+impl<R: Runtime> Default for ToolRegistry<R> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<R: Runtime> ToolRegistry<R> {
     pub fn new() -> Self {
         Self {
@@ -153,12 +159,12 @@ impl<R: Runtime> ToolRegistry<R> {
         self.tools.insert(tool.name().to_string(), tool);
     }
 
-    pub fn get(&self, name: &str) -> Option<&Box<dyn Tool<R>>> {
-        self.tools.get(name)
+    pub fn get(&self, name: &str) -> Option<&dyn Tool<R>> {
+        self.tools.get(name).map(|b| &**b)
     }
-    
-    pub fn list(&self) -> Vec<&Box<dyn Tool<R>>> {
-        self.tools.values().collect()
+
+    pub fn list(&self) -> Vec<&dyn Tool<R>> {
+        self.tools.values().map(|b| &**b).collect()
     }
 }
 

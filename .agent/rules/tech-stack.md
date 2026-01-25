@@ -28,8 +28,11 @@ AnyCowork Desktop (Tauri)
 
 ### Technology Stack
 
+### Technology Stack
+
 - **Backend**: Rust, Tauri 2.0, Diesel ORM
-- **AI**: OpenAI GPT via rig-core
+- **AI**: Gemini 3 Pro (Primary), rig-core (Orchestration)
+- **Extensibility**: MCP (Model Context Protocol) for tools
 - **Telegram**: teloxide (async Telegram bot framework)
 - **Frontend**: React 19, Vite, TypeScript, Tailwind CSS
 - **UI**: shadcn/ui, Radix UI primitives

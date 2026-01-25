@@ -12,11 +12,11 @@ function MainLayout() {
   const isDesktop = useIsDesktopApp();
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-background rounded-xl border border-border/50">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-background rounded-xl border border-border shadow-2xl">
       {isDesktop && <TitleBar />}
 
       {/* Main app content with adjustment for titlebar */}
-      <div className={`flex flex-1 overflow-hidden ${isDesktop ? 'pt-8' : ''}`}>
+      <div className={`flex flex-1 overflow-hidden`}>
         {/* Sidebar Navigation */}
         <Sidebar />
 
