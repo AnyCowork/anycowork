@@ -100,6 +100,7 @@ pub struct AgentUpdateDto {
     pub skills: Option<Vec<String>>,
     pub mcp_servers: Option<Vec<String>>,
     pub execution_settings: Option<serde_json::Value>,
+    pub platform_configs: Option<String>,
 }
 
 impl Agent {

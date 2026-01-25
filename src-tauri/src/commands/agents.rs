@@ -137,12 +137,14 @@ pub async fn update_agent(
         agent.execution_settings = Some(settings.to_string());
     }
 
+    // Platform Configs - especially for Telegram
+    if let Some(platform_configs_str) = data.platform_configs {
+        agent.platform_configs = Some(platform_configs_str.clone());
+    }
+
     agent.updated_at = chrono::Utc::now().timestamp();
 
     // Save changes
-    // Since we modifying the struct, we can use save_changes if it was Identifiable + AsChangeset
-    // But Struct `Agent` derives Queryable, Selectable. We need to manually update.
-    // Diesel update query:
     diesel::update(agents.filter(id.eq(&agent_id)))
         .set((
             name.eq(&agent.name),
@@ -159,12 +161,139 @@ pub async fn update_agent(
             skills.eq(&agent.skills),
             mcp_servers.eq(&agent.mcp_servers),
             execution_settings.eq(&agent.execution_settings),
+            platform_configs.eq(&agent.platform_configs),
             updated_at.eq(&agent.updated_at),
         ))
         .execute(&mut conn)
         .map_err(|e| e.to_string())?;
 
+    // Sync Telegram configuration if platform_configs changed
+    if let Some(ref platform_configs_json) = agent.platform_configs {
+        log::info!("Syncing Telegram config for agent {}", agent_id);
+        match sync_agent_telegram_config(&state, &agent_id, platform_configs_json).await {
+            Ok(_) => log::info!("Successfully synced Telegram config for agent {}", agent_id),
+            Err(e) => log::error!("Failed to sync Telegram config for agent {}: {}", agent_id, e),
+        }
+    }
+
     Ok(agent.into_dto())
+}
+
+/// Synchronize Telegram configuration for an agent based on platform_configs
+async fn sync_agent_telegram_config(
+    state: &State<'_, AppState>,
+    agent_id: &str,
+    platform_configs_json: &str,
+) -> Result<(), String> {
+    use crate::models::{NewTelegramConfig, TelegramConfig};
+    use schema::telegram_configs;
+
+    // Parse platform_configs
+    let platform_configs: serde_json::Value =
+        serde_json::from_str(platform_configs_json).map_err(|e| format!("Failed to parse platform_configs: {}", e))?;
+
+    let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
+
+    // Check for Telegram configuration
+    if let Some(telegram) = platform_configs.get("telegram") {
+        let bot_token = telegram.get("bot_token").and_then(|t| t.as_str());
+        let enabled = telegram.get("enabled").and_then(|e| e.as_bool()).unwrap_or(false);
+
+        if let Some(token) = bot_token {
+            if !token.is_empty() {
+                log::info!("Found Telegram bot token for agent {}, creating/updating config", agent_id);
+
+                // Find existing telegram_config for this agent
+                let existing: Option<TelegramConfig> = telegram_configs::table
+                    .filter(telegram_configs::agent_id.eq(agent_id))
+                    .first::<TelegramConfig>(&mut conn)
+                    .optional()
+                    .map_err(|e| e.to_string())?;
+
+                let config_id = if let Some(existing_config) = existing {
+                    log::info!("Updating existing Telegram config {} for agent {}", existing_config.id, agent_id);
+                    
+                    // Update if token changed
+                    if existing_config.bot_token != token {
+                        log::info!("Bot token changed for agent {}, stopping old bot and updating", agent_id);
+                        // Stop old bot
+                        let _ = state.telegram_manager.stop_bot(&existing_config.id).await;
+                        
+                        // Update token
+                        diesel::update(telegram_configs::table.filter(telegram_configs::id.eq(&existing_config.id)))
+                            .set((
+                                telegram_configs::bot_token.eq(token),
+                                telegram_configs::is_active.eq(if enabled { 1 } else { 0 }),
+                                telegram_configs::updated_at.eq(chrono::Utc::now().naive_utc()),
+                            ))
+                            .execute(&mut conn)
+                            .map_err(|e| e.to_string())?;
+                    } else if existing_config.is_active != if enabled { 1 } else { 0 } {
+                        // Only enabled status changed
+                        diesel::update(telegram_configs::table.filter(telegram_configs::id.eq(&existing_config.id)))
+                            .set((
+                                telegram_configs::is_active.eq(if enabled { 1 } else { 0 }),
+                                telegram_configs::updated_at.eq(chrono::Utc::now().naive_utc()),
+                            ))
+                            .execute(&mut conn)
+                            .map_err(|e| e.to_string())?;
+                    }
+
+                    existing_config.id
+                } else {
+                    // Create new telegram_config
+                    log::info!("Creating new Telegram config for agent {}", agent_id);
+                    let new_config = NewTelegramConfig {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        bot_token: token.to_string(),
+                        agent_id: agent_id.to_string(),
+                        is_active: if enabled { 1 } else { 0 },
+                        allowed_chat_ids: None,
+                        created_at: chrono::Utc::now().naive_utc(),
+                        updated_at: chrono::Utc::now().naive_utc(),
+                    };
+
+                    diesel::insert_into(telegram_configs::table)
+                        .values(&new_config)
+                        .execute(&mut conn)
+                        .map_err(|e| e.to_string())?;
+
+                    new_config.id
+                };
+
+                // Start/stop bot based on enabled flag
+                if enabled {
+                    log::info!("Starting Telegram bot for agent {}", agent_id);
+                    match state.telegram_manager.start_bot(&config_id).await {
+                        Ok(_) => log::info!("✅ Telegram bot started for agent {}", agent_id),
+                        Err(e) => log::error!("❌ Failed to start Telegram bot for agent {}: {}", agent_id, e),
+                    }
+                } else {
+                    log::info!("Stopping Telegram bot for agent {} (disabled)", agent_id);
+                    let _ = state.telegram_manager.stop_bot(&config_id).await;
+                }
+
+                return Ok(());
+            }
+        }
+    }
+
+    // No telegram config or empty token - delete existing config if any
+    log::info!("No Telegram config for agent {}, cleaning up", agent_id);
+    let existing_configs: Vec<TelegramConfig> = telegram_configs::table
+        .filter(telegram_configs::agent_id.eq(agent_id))
+        .load::<TelegramConfig>(&mut conn)
+        .map_err(|e| e.to_string())?;
+
+    for config in existing_configs {
+        log::info!("Deleting Telegram config {} and stopping bot for agent {}", config.id, agent_id);
+        let _ = state.telegram_manager.stop_bot(&config.id).await;
+        diesel::delete(telegram_configs::table.filter(telegram_configs::id.eq(&config.id)))
+            .execute(&mut conn)
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
 }
 
 use tauri::Runtime;
@@ -211,7 +340,7 @@ pub async fn chat_internal<R: Runtime>(
         .execute(&mut conn)
         .map_err(|e| e.to_string())?;
 
-    // 4. Start Background Task (AgentLoop instantiation handled inside start_chat_task -> Coordinator)
+    // 4. Start Background Task
     crate::agents::start_chat_task(
         agent_record,
         message,

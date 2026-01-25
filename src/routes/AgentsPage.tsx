@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Bot, Plus, Trash2, Edit, Brain, Sparkles, MessageSquare, Server, Wrench, Key, Database, Shield, ShieldCheck, ShieldAlert
+  Bot, Plus, Trash2, Edit, Brain, Sparkles, MessageSquare, Server, Wrench, Key, Database, Shield, ShieldCheck, ShieldAlert, CheckCircle2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -817,31 +817,58 @@ You should:
               </div>
 
               {formData.messaging_connections?.includes('telegram') && (
-                <div className="space-y-2 mt-3 pl-6">
-                  <Label htmlFor="telegram_bot_token" className="text-sm">Bot Token (Optional - overrides global)</Label>
-                  <Input
-                    id="telegram_bot_token"
-                    type="password"
-                    placeholder="Leave empty to use global settings"
-                    value={formData.platform_configs?.telegram?.bot_token || ''}
-                    onChange={(e) => {
-                      const configs = formData.platform_configs || {};
-                      setFormData({
-                        ...formData,
-                        platform_configs: {
-                          ...configs,
-                          telegram: {
-                            ...configs.telegram,
-                            bot_token: e.target.value,
-                            enabled: true
+                <div className="space-y-3 mt-3 pl-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="telegram_bot_token" className="text-sm">Bot Token (Optional - overrides global)</Label>
+                    <Input
+                      id="telegram_bot_token"
+                      type="password"
+                      placeholder="Leave empty to use global settings"
+                      value={formData.platform_configs?.telegram?.bot_token || ''}
+                      onChange={(e) => {
+                        const configs = formData.platform_configs || {};
+                        setFormData({
+                          ...formData,
+                          platform_configs: {
+                            ...configs,
+                            telegram: {
+                              ...configs.telegram,
+                              bot_token: e.target.value,
+                              enabled: true
+                            }
                           }
-                        }
-                      });
-                    }}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    If provided, this agent will use its own Telegram bot. Otherwise, it will use the global bot token from Settings.
-                  </p>
+                        });
+                      }}
+                    />
+                    {formData.platform_configs?.telegram?.bot_token && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const token = formData.platform_configs?.telegram?.bot_token;
+                          if (token) {
+                            anycoworkApi.testTelegramConnection(token).then((result) => {
+                              if (result.success) {
+                                toast.success(`Connected! Bot: @${result.bot_username}`);
+                              } else {
+                                toast.error(result.error || 'Connection failed');
+                              }
+                            }).catch((err) => {
+                              toast.error(`Test failed: ${err.message || err}`);
+                            });
+                          }
+                        }}
+                        className="gap-2"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        Test Connection
+                      </Button>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      If provided, this agent will use its own Telegram bot. Otherwise, it will use the global bot token from Settings.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>

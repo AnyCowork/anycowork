@@ -91,6 +91,7 @@ pub fn run() {
             commands::stop_telegram_bot,
             commands::get_telegram_bot_status,
             commands::get_running_telegram_bots,
+            commands::test_telegram_bot,
             // Page commands
             commands::create_page,
             commands::get_pages,

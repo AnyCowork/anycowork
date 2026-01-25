@@ -16,7 +16,7 @@
 
 - [Rust](https://rustup.rs/) (1.77.2+)
 - [Node.js](https://nodejs.org/) (18+)
-- At least one AI API key (OpenAI GPT)
+- At least one AI API key (Gemini)
 
 ### 1. Install Dependencies
 
@@ -36,12 +36,12 @@ Create a `.env` file in the project root:
 
 ```bash
 cp .env.example .env
-# Edit .env and add your OpenAI API key
+# Edit .env and add your Gemini API key
 ```
 
 Or manually create `.env`:
 ```bash
-OPENAI_API_KEY=your_openai_key_here
+GEMINI_API_KEY=your_gemini_key_here
 ```
 
 ### 3. Run the Desktop App
@@ -77,7 +77,7 @@ npm install
 
 # 2. Set up environment
 cp .env.example .env
-# Edit .env and add: OPENAI_API_KEY=your_key_here
+# Edit .env and add: GEMINI_API_KEY=your_key_here
 
 # 3. Run the app with hot-reload
 npm run tauri dev
@@ -187,7 +187,7 @@ anycowork/
 ## Technology Stack
 
 - **Backend**: Rust, Tauri 2.0, Diesel ORM, SQLite
-- **AI**: OpenAI GPT via rig-core
+- **AI**: Gemini via rig-core
 - **Telegram**: teloxide
 - **Frontend**: React 19, Vite, TypeScript, Tailwind CSS
 - **UI Components**: shadcn/ui, Radix UI
@@ -200,7 +200,7 @@ Create a `.env` file:
 
 ```bash
 # Required: AI API Key
-OPENAI_API_KEY=your_openai_key_here
+GEMINI_API_KEY=your_gemini_key_here
 
 # Optional: Telegram (configured via UI)
 # Bot tokens are stored in the database
@@ -265,8 +265,8 @@ Database location:
    - Check that the bot configuration is set to active
    - Ensure the bot is started via the UI
 
-4. **OpenAI API errors**
-   - Verify `OPENAI_API_KEY` is set correctly
+4. **Gemini API errors**
+   - Verify `GEMINI_API_KEY` is set correctly
    - Check API key has sufficient credits
 
 ## Contributing

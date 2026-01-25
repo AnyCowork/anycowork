@@ -71,6 +71,7 @@ export interface AgentUpdate {
   skills?: string[];
   mcp_servers?: string[];
   execution_settings?: ExecutionSettings;
+  platform_configs?: Record<string, any>;
 }
 
 export interface AIConfig {
@@ -275,79 +276,67 @@ export const anycoworkApi = {
   updateAIConfig: async (config: any) => ({ success: true }),
   // Messaging (Bridge for UI single-config view)
   getMessagingConfig: async () => {
-
-    try {
-      const configs = await invoke<any[]>('get_telegram_configs');
-      const config = configs[0]; // Use first one for now
-      return {
-        telegram: {
-          enabled: config ? config.is_active === 1 : false,
-          bot_token: config ? config.bot_token : '',
-          allowed_users: [],
-          config_id: config ? config.id : undefined // Store ID for updates
-        }
-      };
-    } catch (e) {
-      console.error("Failed to get messaging config", e);
-      return { telegram: { enabled: false, bot_token: '', allowed_users: [] } };
-    }
+    const configs = await invoke<any[]>('get_telegram_configs');
+    const config = configs[0]; // Use first one for now
+    return {
+      telegram: {
+        enabled: config ? config.is_active === 1 : false,
+        bot_token: config ? config.bot_token : '',
+        allowed_users: [],
+        config_id: config ? config.id : undefined // Store ID for updates
+      }
+    };
   },
 
   updateMessagingConfig: async (config: any) => {
-    try {
-      // 1. Get existing configs to find ID
-      const configs = await invoke<any[]>('get_telegram_configs');
-      const existing = configs[0];
+    // 1. Get existing configs to find ID
+    const configs = await invoke<any[]>('get_telegram_configs');
+    const existing = configs[0];
 
-      const telegram = config.telegram;
-      const isActive = telegram.enabled ? 1 : 0;
+    const telegram = config.telegram;
+    const isActive = telegram.enabled ? 1 : 0;
 
-      if (existing) {
-        // Update
-        await invoke('update_telegram_config', {
-          configId: existing.id,
-          newBotToken: telegram.bot_token,
-          newIsActive: isActive
-        });
+    if (existing) {
+      // Update
+      await invoke('update_telegram_config', {
+        config_id: existing.id,
+        new_bot_token: telegram.bot_token,
+        new_is_active: isActive
+      });
 
-        // Handle Start/Stop
-        if (existing.is_active !== isActive) {
-          if (isActive) {
-            await invoke('start_telegram_bot', { configId: existing.id });
-          } else {
-            await invoke('stop_telegram_bot', { configId: existing.id });
-          }
-        }
-        // If token changed and it was active, restart might be needed (simplified here)
-
-      } else {
-        // Create New
-        // Need an agent ID. Fetch agents and pick first one.
-        const agents = await invoke<any[]>('get_agents');
-        if (agents.length === 0) throw new Error("No agents available to attach bot to");
-
-        const newConfig = await invoke<any>('create_telegram_config', {
-          botToken: telegram.bot_token,
-          agentId: agents[0].id,
-          allowedChatIds: null
-        });
-
+      // Handle Start/Stop
+      if (existing.is_active !== isActive) {
         if (isActive) {
-          await invoke('start_telegram_bot', { configId: newConfig.id });
+          await invoke('start_telegram_bot', { config_id: existing.id });
+        } else {
+          await invoke('stop_telegram_bot', { config_id: existing.id });
         }
       }
-      return { success: true };
+      // If token changed and it was active, restart might be needed (simplified here)
 
-    } catch (e) {
-      console.error("Update messaging config failed", e);
-      // throw e; // Don't throw to avoid crashing UI, just log
-      return { success: false, error: String(e) };
+    } else {
+      // Create New
+      // Need an agent ID. Fetch agents and pick first one.
+      const agents = await invoke<any[]>('get_agents');
+      if (agents.length === 0) throw new Error("No agents available to attach bot to");
+
+      const newConfig = await invoke<any>('create_telegram_config', {
+        bot_token: telegram.bot_token,
+        agent_id: agents[0].id,
+        allowed_chat_ids: null
+      });
+
+      if (isActive) {
+        await invoke('start_telegram_bot', { config_id: newConfig.id });
+      }
     }
+    return { success: true };
   },
 
   testTelegramConnection: async (botToken: string) => {
-    // For now, just a dummy check or we could try to create a temp bot
-    return { success: true, bot_username: 'TestBot', error: undefined as string | undefined };
+    return invoke<{ success: boolean; bot_username?: string; error?: string }>('test_telegram_bot', {
+      botToken: botToken
+    });
   },
 
   // Telegram Bot Config (Tauri commands)
@@ -355,13 +344,13 @@ export const anycoworkApi = {
     return invoke<TelegramConfig[]>('get_telegram_configs');
   },
   getTelegramConfig: async (configId: string) => {
-    return invoke<TelegramConfig>('get_telegram_config', { configId: configId });
+    return invoke<TelegramConfig>('get_telegram_config', { config_id: configId });
   },
   createTelegramConfig: async (botToken: string, agentId: string, allowedChatIds?: string) => {
     return invoke<TelegramConfig>('create_telegram_config', {
-      botToken: botToken,
-      agentId: agentId,
-      allowedChatIds: allowedChatIds
+      bot_token: botToken,
+      agent_id: agentId,
+      allowed_chat_ids: allowedChatIds
     });
   },
   updateTelegramConfig: async (configId: string, data: {
@@ -371,24 +360,24 @@ export const anycoworkApi = {
     new_allowed_chat_ids?: string;
   }) => {
     return invoke<TelegramConfig>('update_telegram_config', {
-      configId: configId,
-      newBotToken: data.new_bot_token,
-      newAgentId: data.new_agent_id,
-      newIsActive: data.new_is_active,
-      newAllowedChatIds: data.new_allowed_chat_ids,
+      config_id: configId,
+      new_bot_token: data.new_bot_token,
+      new_agent_id: data.new_agent_id,
+      new_is_active: data.new_is_active,
+      new_allowed_chat_ids: data.new_allowed_chat_ids,
     });
   },
   deleteTelegramConfig: async (configId: string) => {
-    return invoke('delete_telegram_config', { configId: configId });
+    return invoke('delete_telegram_config', { config_id: configId });
   },
   startTelegramBot: async (configId: string) => {
-    return invoke('start_telegram_bot', { configId: configId });
+    return invoke('start_telegram_bot', { config_id: configId });
   },
   stopTelegramBot: async (configId: string) => {
-    return invoke('stop_telegram_bot', { configId: configId });
+    return invoke('stop_telegram_bot', { config_id: configId });
   },
   getTelegramBotStatus: async (configId: string) => {
-    return invoke<TelegramBotStatus>('get_telegram_bot_status', { configId: configId });
+    return invoke<TelegramBotStatus>('get_telegram_bot_status', { config_id: configId });
   },
   getRunningTelegramBots: async () => {
     return invoke<string[]>('get_running_telegram_bots');
@@ -397,7 +386,18 @@ export const anycoworkApi = {
   // Agent Definitions
   getAgent: async (id: string) => ({ id, name: 'Agent', description: '', system_prompt: '' }),
   updateAgent: async (agentId: string, data: any) => {
-    return invoke<Agent>('update_agent', { agentId: agentId, data: data });
+    // Serialize platform_configs if present (backend expects JSON string)
+    if (data.platform_configs && typeof data.platform_configs === 'object') {
+      data = {
+        ...data,
+        platform_configs: JSON.stringify(data.platform_configs)
+      };
+    }
+
+    return invoke<Agent>('update_agent', {
+      agentId: agentId,
+      data,
+    });
   },
   deleteAgent: async (agentId: string) => ({ success: true }),
 

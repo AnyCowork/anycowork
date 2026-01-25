@@ -135,6 +135,7 @@ dependencies = [
  "log",
  "minijinja",
  "pdf-extract",
+ "reqwest 0.11.27",
  "rig-core",
  "schemars 0.8.22",
  "serde",

@@ -152,3 +152,69 @@ pub async fn get_telegram_bot_status(
 pub async fn get_running_telegram_bots(state: State<'_, AppState>) -> Result<Vec<String>, String> {
     Ok(state.telegram_manager.get_running_bot_ids().await)
 }
+
+// Response struct for test_telegram_bot
+#[derive(serde::Serialize)]
+pub struct TelegramBotTestResponse {
+    pub success: bool,
+    pub bot_username: Option<String>,
+    pub error: Option<String>,
+}
+
+#[tauri::command]
+pub async fn test_telegram_bot(bot_token: String) -> Result<TelegramBotTestResponse, String> {
+    // Validate token format (should be in format: <bot_id>:<token_hash>)
+    if !bot_token.contains(':') {
+        return Ok(TelegramBotTestResponse {
+            success: false,
+            bot_username: None,
+            error: Some("Invalid token format".to_string()),
+        });
+    }
+
+    // Make request to Telegram API
+    let url = format!("https://api.telegram.org/bot{}/getMe", bot_token);
+    
+    let client = reqwest::Client::new();
+    match client.get(&url).send().await {
+        Ok(response) => {
+            if response.status().is_success() {
+                // Parse response
+                match response.json::<serde_json::Value>().await {
+                    Ok(json) => {
+                        if let Some(result) = json.get("result") {
+                            if let Some(username) = result.get("username").and_then(|u| u.as_str()) {
+                                return Ok(TelegramBotTestResponse {
+                                    success: true,
+                                    bot_username: Some(username.to_string()),
+                                    error: None,
+                                });
+                            }
+                        }
+                        Ok(TelegramBotTestResponse {
+                            success: false,
+                            bot_username: None,
+                            error: Some("Unable to parse bot information".to_string()),
+                        })
+                    }
+                    Err(e) => Ok(TelegramBotTestResponse {
+                        success: false,
+                        bot_username: None,
+                        error: Some(format!("Failed to parse response: {}", e)),
+                    }),
+                }
+            } else {
+                Ok(TelegramBotTestResponse {
+                    success: false,
+                    bot_username: None,
+                    error: Some(format!("Invalid bot token (HTTP {})", response.status())),
+                })
+            }
+        }
+        Err(e) => Ok(TelegramBotTestResponse {
+            success: false,
+            bot_username: None,
+            error: Some(format!("Network error: {}", e)),
+        }),
+    }
+}
