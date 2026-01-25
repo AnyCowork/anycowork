@@ -1,8 +1,8 @@
-use tauri::State;
-use crate::AppState;
-use crate::models::{TelegramConfig, NewTelegramConfig, UpdateTelegramConfig};
+use crate::models::{NewTelegramConfig, TelegramConfig, UpdateTelegramConfig};
 use crate::schema;
+use crate::AppState;
 use diesel::prelude::*;
+use tauri::State;
 
 #[tauri::command]
 pub async fn create_telegram_config(
@@ -39,7 +39,9 @@ pub async fn create_telegram_config(
 }
 
 #[tauri::command]
-pub async fn get_telegram_configs(state: State<'_, AppState>) -> Result<Vec<TelegramConfig>, String> {
+pub async fn get_telegram_configs(
+    state: State<'_, AppState>,
+) -> Result<Vec<TelegramConfig>, String> {
     use schema::telegram_configs::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
@@ -147,8 +149,6 @@ pub async fn get_telegram_bot_status(
 }
 
 #[tauri::command]
-pub async fn get_running_telegram_bots(
-    state: State<'_, AppState>,
-) -> Result<Vec<String>, String> {
+pub async fn get_running_telegram_bots(state: State<'_, AppState>) -> Result<Vec<String>, String> {
     Ok(state.telegram_manager.get_running_bot_ids().await)
 }

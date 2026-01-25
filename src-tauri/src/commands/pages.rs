@@ -1,9 +1,11 @@
-use tauri::State;
-use crate::AppState;
-use crate::models::{Page, NewPage, UpdatePage, Block, NewBlock, UpdateBlock, Attachment, NewAttachment};
+use crate::models::{
+    Attachment, Block, NewAttachment, NewBlock, NewPage, Page, UpdateBlock, UpdatePage,
+};
 use crate::schema;
+use crate::AppState;
 use diesel::prelude::*;
 use serde::Deserialize;
+use tauri::State;
 
 // ============================================================================
 // PAGE COMMANDS
@@ -53,7 +55,7 @@ pub async fn get_pages(
     parent_id_param: Option<String>,
     archived: Option<bool>,
 ) -> Result<Vec<Page>, String> {
-    use schema::pages::dsl::{pages, parent_id, is_archived, updated_at};
+    use schema::pages::dsl::{is_archived, pages, parent_id, updated_at};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -77,10 +79,7 @@ pub async fn get_pages(
 }
 
 #[tauri::command]
-pub async fn get_page(
-    state: State<'_, AppState>,
-    page_id: String,
-) -> Result<Page, String> {
+pub async fn get_page(state: State<'_, AppState>, page_id: String) -> Result<Page, String> {
     use schema::pages::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
@@ -99,7 +98,7 @@ pub async fn update_page(
     cover_image_param: Option<String>,
     is_published_param: Option<bool>,
 ) -> Result<Page, String> {
-    use schema::pages::dsl::{pages, id};
+    use schema::pages::dsl::{id, pages};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -125,10 +124,7 @@ pub async fn update_page(
 }
 
 #[tauri::command]
-pub async fn archive_page(
-    state: State<'_, AppState>,
-    page_id: String,
-) -> Result<Page, String> {
+pub async fn archive_page(state: State<'_, AppState>, page_id: String) -> Result<Page, String> {
     use schema::pages::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
@@ -155,10 +151,7 @@ pub async fn archive_page(
 }
 
 #[tauri::command]
-pub async fn restore_page(
-    state: State<'_, AppState>,
-    page_id: String,
-) -> Result<Page, String> {
+pub async fn restore_page(state: State<'_, AppState>, page_id: String) -> Result<Page, String> {
     use schema::pages::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
@@ -185,10 +178,7 @@ pub async fn restore_page(
 }
 
 #[tauri::command]
-pub async fn delete_page(
-    state: State<'_, AppState>,
-    page_id: String,
-) -> Result<(), String> {
+pub async fn delete_page(state: State<'_, AppState>, page_id: String) -> Result<(), String> {
     use schema::pages::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
@@ -227,7 +217,7 @@ pub async fn create_block(
     order_index_param: Option<i32>,
 ) -> Result<Block, String> {
     use schema::blocks;
-    use schema::blocks::dsl::{blocks as blocks_table, page_id, order_index, id as block_id};
+    use schema::blocks::dsl::{blocks as blocks_table, id as block_id, order_index, page_id};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -297,10 +287,7 @@ pub async fn update_block(
 }
 
 #[tauri::command]
-pub async fn delete_block(
-    state: State<'_, AppState>,
-    block_id: String,
-) -> Result<(), String> {
+pub async fn delete_block(state: State<'_, AppState>, block_id: String) -> Result<(), String> {
     use schema::blocks::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
@@ -465,7 +452,9 @@ mod tests {
         crate::AppState {
             db_pool: pool,
             pending_approvals: std::sync::Arc::new(dashmap::DashMap::new()),
-            telegram_manager: std::sync::Arc::new(crate::telegram::TelegramBotManager::new(create_test_pool())),
+            telegram_manager: std::sync::Arc::new(crate::telegram::TelegramBotManager::new(
+                create_test_pool(),
+            )),
             permission_manager: std::sync::Arc::new(crate::permissions::PermissionManager::new()),
         }
     }
@@ -478,11 +467,20 @@ mod tests {
         let state_handle = app.state::<crate::AppState>();
 
         // Test create_page
-        let page = create_page(state_handle.clone().into(), "Test Page".to_string(), "page".to_string(), None).await.unwrap();
+        let page = create_page(
+            state_handle.clone().into(),
+            "Test Page".to_string(),
+            "page".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(page.title, "Test Page");
 
         // Test get_pages
-        let pages = get_pages(state_handle.clone().into(), None, Some(false)).await.unwrap();
+        let pages = get_pages(state_handle.clone().into(), None, Some(false))
+            .await
+            .unwrap();
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0].id, page.id);
     }
@@ -494,7 +492,14 @@ mod tests {
         app.manage(state);
         let state_handle = app.state::<crate::AppState>();
 
-        let page = create_page(state_handle.clone().into(), "Test Page".to_string(), "page".to_string(), None).await.unwrap();
+        let page = create_page(
+            state_handle.clone().into(),
+            "Test Page".to_string(),
+            "page".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
 
         // Test create_block
         let block = create_block(
@@ -502,12 +507,16 @@ mod tests {
             page.id.clone(),
             "text".to_string(),
             "{\"text\": \"hello\"}".to_string(),
-            None
-        ).await.unwrap();
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(block.type_, "text");
 
         // Test get_page_blocks
-        let blocks = get_page_blocks(state_handle.clone().into(), page.id).await.unwrap();
+        let blocks = get_page_blocks(state_handle.clone().into(), page.id)
+            .await
+            .unwrap();
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0].id, block.id);
     }

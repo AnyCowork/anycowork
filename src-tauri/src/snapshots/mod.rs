@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use sha2::{Sha256, Digest};
-use walkdir::WalkDir;
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
+use walkdir::WalkDir;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
@@ -32,17 +32,22 @@ impl SnapshotManager {
 
     pub fn create_snapshot(&self) -> Result<Snapshot, String> {
         let mut file_hashes = HashMap::new();
-        
-        let walker = WalkDir::new(&self.root_path).into_iter()
-            .filter_entry(|e| {
-                let name = e.file_name().to_string_lossy();
-                // Skip hidden files/dirs and common large directories
-                !name.starts_with('.') && name != "target" && name != "node_modules" && name != "dist" && name != "out"
-            });
+
+        let walker = WalkDir::new(&self.root_path).into_iter().filter_entry(|e| {
+            let name = e.file_name().to_string_lossy();
+            // Skip hidden files/dirs and common large directories
+            !name.starts_with('.')
+                && name != "target"
+                && name != "node_modules"
+                && name != "dist"
+                && name != "out"
+        });
 
         for entry in walker.filter_map(|e| e.ok()) {
             if entry.file_type().is_file() {
-                let relative_path = entry.path().strip_prefix(&self.root_path)
+                let relative_path = entry
+                    .path()
+                    .strip_prefix(&self.root_path)
                     .map_err(|e| e.to_string())?
                     .to_string_lossy()
                     .to_string();
@@ -76,7 +81,7 @@ impl SnapshotManager {
                     if old_hash != new_hash {
                         modified_files.push(path.clone());
                     }
-                },
+                }
                 None => {
                     new_files.push(path.clone());
                 }
@@ -94,9 +99,8 @@ impl SnapshotManager {
             new_files,
             modified_files,
             deleted_files,
+        }
     }
-}
-
 }
 
 #[cfg(test)]
@@ -140,7 +144,7 @@ mod tests {
         // 4. Delete B
         fs::remove_file(&file_b).unwrap();
         let snap3 = manager.create_snapshot().unwrap();
-        
+
         let diff2 = manager.diff(&snap2, &snap3);
         assert!(diff2.deleted_files.contains(&"file_b.txt".to_string()));
     }

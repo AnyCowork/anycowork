@@ -1,15 +1,19 @@
 pub mod agent;
-pub mod session;
-pub mod telegram;
 pub mod page;
+pub mod session;
 pub mod skill;
+pub mod telegram;
 
 // Re-export commonly used types
-pub use agent::{Agent, NewAgent, AgentDto, AgentCharacteristicsDto, AIConfigDto, AgentUpdateDto};
-pub use session::{Session, NewSession, UpdateSession, Message, NewMessage};
-pub use telegram::{TelegramConfig, NewTelegramConfig, UpdateTelegramConfig};
-pub use page::{Page, NewPage, UpdatePage, Block, NewBlock, UpdateBlock, Attachment, NewAttachment};
-pub use skill::{AgentSkill, NewAgentSkill, UpdateAgentSkill, AgentSkillAssignment, NewAgentSkillAssignment};
+pub use agent::{AIConfigDto, Agent, AgentCharacteristicsDto, AgentDto, AgentUpdateDto, NewAgent};
+pub use page::{
+    Attachment, Block, NewAttachment, NewBlock, NewPage, Page, UpdateBlock, UpdatePage,
+};
+pub use session::{Message, NewMessage, NewSession, Session, UpdateSession};
+pub use skill::{
+    AgentSkill, AgentSkillAssignment, NewAgentSkill, NewAgentSkillAssignment, UpdateAgentSkill,
+};
+pub use telegram::{NewTelegramConfig, TelegramConfig, UpdateTelegramConfig};
 
 pub mod execution;
 pub use execution::{Plan, TaskSpec};

@@ -1,4 +1,6 @@
 use tauri::AppHandle;
+#[cfg(debug_assertions)]
+use tauri::Manager;
 
 /// Toggle devtools for the main window
 #[tauri::command]

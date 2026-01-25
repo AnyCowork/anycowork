@@ -1,12 +1,15 @@
-use tauri::State;
-use crate::AppState;
-use crate::models::{Session, NewSession, UpdateSession, Message, NewMessage};
+use crate::models::{Message, NewMessage, NewSession, Session, UpdateSession};
 use crate::schema;
+use crate::AppState;
 use diesel::prelude::*;
 use serde::Serialize;
+use tauri::State;
 
 #[tauri::command]
-pub async fn create_session(state: State<'_, AppState>, agent_id: String) -> Result<Session, String> {
+pub async fn create_session(
+    state: State<'_, AppState>,
+    agent_id: String,
+) -> Result<Session, String> {
     use schema::sessions;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
@@ -41,7 +44,7 @@ pub async fn get_sessions(
     limit: Option<i64>,
     offset: Option<i64>,
 ) -> Result<Vec<Session>, String> {
-    use schema::sessions::dsl::{sessions, archived, updated_at, pinned};
+    use schema::sessions::dsl::{archived, pinned, sessions, updated_at};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -64,9 +67,7 @@ pub async fn get_sessions(
         query = query.offset(off);
     }
 
-    query
-        .load::<Session>(&mut conn)
-        .map_err(|e| e.to_string())
+    query.load::<Session>(&mut conn).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -82,8 +83,11 @@ pub async fn delete_session(state: State<'_, AppState>, session_id: String) -> R
 }
 
 #[tauri::command]
-pub async fn get_session_messages(state: State<'_, AppState>, session_id: String) -> Result<Vec<Message>, String> {
-    use schema::messages::dsl::{messages, created_at};
+pub async fn get_session_messages(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<Vec<Message>, String> {
+    use schema::messages::dsl::{created_at, messages};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
     let results = messages
@@ -107,7 +111,7 @@ pub async fn update_session(
     archived_param: Option<bool>,
     pinned_param: Option<bool>,
 ) -> Result<Session, String> {
-    use schema::sessions::dsl::{sessions, id};
+    use schema::sessions::dsl::{id, sessions};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -140,8 +144,8 @@ pub async fn get_session_with_messages(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<SessionWithMessages, String> {
-    use schema::sessions::dsl::{sessions, id as session_id_col};
-    use schema::messages::dsl::{messages, session_id as msg_session_id, created_at};
+    use schema::messages::dsl::{created_at, messages, session_id as msg_session_id};
+    use schema::sessions::dsl::{id as session_id_col, sessions};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -200,11 +204,8 @@ pub async fn add_message(
 }
 
 #[tauri::command]
-pub async fn delete_message(
-    state: State<'_, AppState>,
-    message_id: String,
-) -> Result<(), String> {
-    use schema::messages::dsl::{messages, id};
+pub async fn delete_message(state: State<'_, AppState>, message_id: String) -> Result<(), String> {
+    use schema::messages::dsl::{id, messages};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
     diesel::delete(messages.filter(id.eq(message_id)))
@@ -294,7 +295,7 @@ mod tests {
             .values(&new_agent)
             .execute(conn)
             .unwrap();
-        
+
         agent_id
     }
 
@@ -303,7 +304,9 @@ mod tests {
         crate::AppState {
             db_pool: pool,
             pending_approvals: std::sync::Arc::new(dashmap::DashMap::new()),
-            telegram_manager: std::sync::Arc::new(crate::telegram::TelegramBotManager::new(create_test_pool())),
+            telegram_manager: std::sync::Arc::new(crate::telegram::TelegramBotManager::new(
+                create_test_pool(),
+            )),
             permission_manager: std::sync::Arc::new(crate::permissions::PermissionManager::new()),
         }
     }
@@ -319,11 +322,15 @@ mod tests {
         let agent_id = create_test_agent(&mut conn);
 
         // Test create_session
-        let session = create_session(state_handle.clone().into(), agent_id.clone()).await.unwrap();
+        let session = create_session(state_handle.clone().into(), agent_id.clone())
+            .await
+            .unwrap();
         assert_eq!(session.agent_id, agent_id);
 
         // Test get_sessions
-        let sessions = get_sessions(state_handle.clone().into(), Some(false), None, None).await.unwrap();
+        let sessions = get_sessions(state_handle.clone().into(), Some(false), None, None)
+            .await
+            .unwrap();
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].id, session.id);
     }
@@ -337,7 +344,9 @@ mod tests {
 
         let mut conn = state_handle.db_pool.get().unwrap();
         let agent_id = create_test_agent(&mut conn);
-        let session = create_session(state_handle.clone().into(), agent_id).await.unwrap();
+        let session = create_session(state_handle.clone().into(), agent_id)
+            .await
+            .unwrap();
 
         // Test add_message
         let msg = add_message(
@@ -346,12 +355,16 @@ mod tests {
             "user".to_string(),
             "Hello".to_string(),
             None,
-            None
-        ).await.unwrap();
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(msg.content, "Hello");
 
         // Test get_session_messages
-        let messages = get_session_messages(state_handle.clone().into(), session.id).await.unwrap();
+        let messages = get_session_messages(state_handle.clone().into(), session.id)
+            .await
+            .unwrap();
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].id, msg.id);
     }

@@ -1,8 +1,8 @@
-use tauri::State;
-use crate::AppState;
 use crate::models::{AgentSkill, NewAgentSkill, UpdateAgentSkill};
 use crate::schema;
+use crate::AppState;
 use diesel::prelude::*;
+use tauri::State;
 
 #[tauri::command]
 pub async fn get_skills(
@@ -26,10 +26,7 @@ pub async fn get_skills(
 }
 
 #[tauri::command]
-pub async fn get_skill(
-    state: State<'_, AppState>,
-    skill_id: String,
-) -> Result<AgentSkill, String> {
+pub async fn get_skill(state: State<'_, AppState>, skill_id: String) -> Result<AgentSkill, String> {
     use schema::agent_skills::dsl::{agent_skills, id};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
@@ -79,6 +76,7 @@ pub async fn create_skill(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn update_skill(
     state: State<'_, AppState>,
     skill_id: String,
@@ -123,10 +121,7 @@ pub async fn update_skill(
 }
 
 #[tauri::command]
-pub async fn delete_skill(
-    state: State<'_, AppState>,
-    skill_id: String,
-) -> Result<(), String> {
+pub async fn delete_skill(state: State<'_, AppState>, skill_id: String) -> Result<(), String> {
     use schema::agent_skills::dsl::{agent_skills, id};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
@@ -142,7 +137,7 @@ pub async fn toggle_skill(
     state: State<'_, AppState>,
     skill_id: String,
 ) -> Result<AgentSkill, String> {
-    use schema::agent_skills::dsl::{agent_skills, id, enabled};
+    use schema::agent_skills::dsl::{agent_skills, enabled, id};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 

@@ -1,8 +1,8 @@
+use crate::models::NewAgent;
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::env;
-use crate::models::NewAgent;
 
 pub type DbPool = r2d2::Pool<ConnectionManager<SqliteConnection>>;
 
@@ -18,7 +18,7 @@ pub fn establish_connection() -> DbPool {
         let db_path = path.join("anycowork.db");
         format!("sqlite://{}", db_path.to_string_lossy())
     });
-    
+
     let manager = ConnectionManager::<SqliteConnection>::new(database_url);
     r2d2::Pool::builder()
         .build(manager)
@@ -27,12 +27,13 @@ pub fn establish_connection() -> DbPool {
 
 pub fn run_migrations(pool: &DbPool) {
     let mut conn = pool.get().expect("Failed to get connection for migrations");
-    conn.run_pending_migrations(MIGRATIONS).expect("Failed to run migrations");
+    conn.run_pending_migrations(MIGRATIONS)
+        .expect("Failed to run migrations");
 }
 
 pub fn ensure_default_agent(pool: &DbPool) {
     use crate::schema::agents::dsl::*;
-    
+
     let mut conn = match pool.get() {
         Ok(c) => c,
         Err(e) => {
@@ -40,7 +41,7 @@ pub fn ensure_default_agent(pool: &DbPool) {
             return;
         }
     };
-    
+
     // Check if any agents exist
     let count: i64 = match agents.count().get_result(&mut conn) {
         Ok(c) => c,
@@ -49,10 +50,10 @@ pub fn ensure_default_agent(pool: &DbPool) {
             return;
         }
     };
-    
+
     if count == 0 {
         log::info!("No agents found, creating default agent...");
-        
+
         let default_agent = NewAgent {
             id: uuid::Uuid::new_v4().to_string(),
             name: "AnyCoworker Default".to_string(),
@@ -65,13 +66,16 @@ pub fn ensure_default_agent(pool: &DbPool) {
             ai_model: "gemini-3-pro-preview".to_string(),
             ai_temperature: 0.7,
             ai_config: r#"{"provider": "gemini", "model": "gemini-3-pro-preview"}"#.to_string(),
-            system_prompt: Some(r#"You are an intelligent AI Coworker designed to help with daily office tasks.
+            system_prompt: Some(
+                r#"You are an intelligent AI Coworker designed to help with daily office tasks.
 Your goal is to be proactive, organized, and helpful. 
 You should:
 1. Ask clarifying questions when requirements are vague.
 2. Build and maintain a todo list for complex tasks.
 3. Use available tools to search for information, manage files, and execute code.
-4. Report progress regularly."#.to_string()),
+4. Report progress regularly."#
+                    .to_string(),
+            ),
             permissions: None,
             working_directories: None,
             skills: None,
@@ -84,7 +88,7 @@ You should:
             platform_configs: None,
             execution_settings: None,
         };
-        
+
         match diesel::insert_into(agents)
             .values(&default_agent)
             .execute(&mut conn)
@@ -100,12 +104,12 @@ pub fn create_test_pool() -> DbPool {
     let temp_dir = std::env::temp_dir();
     let db_path = temp_dir.join(format!("anycowork_test_{}.db", uuid::Uuid::new_v4()));
     let db_str = db_path.to_string_lossy().to_string();
-    
+
     let manager = ConnectionManager::<SqliteConnection>::new(db_str);
     let pool = r2d2::Pool::builder()
         .build(manager)
         .expect("Failed to create test pool.");
-    
+
     run_migrations(&pool);
     pool
 }
@@ -126,7 +130,7 @@ mod tests {
     #[test]
     fn test_ensure_default_agent() {
         let pool = create_test_pool();
-        
+
         // Initially no agents (clear any seeded by migrations)
         {
             let mut conn = pool.get().unwrap();
@@ -143,14 +147,14 @@ mod tests {
             let mut conn = pool.get().unwrap();
             let count: i64 = agents.count().get_result(&mut conn).unwrap();
             assert_eq!(count, 1);
-            
+
             let agent = agents.first::<crate::models::Agent>(&mut conn).unwrap();
             assert_eq!(agent.name, "AnyCoworker Default");
         }
 
         // Run again, should still have 1 agent (idempotent)
         ensure_default_agent(&pool);
-        
+
         {
             let mut conn = pool.get().unwrap();
             let count: i64 = agents.count().get_result(&mut conn).unwrap();

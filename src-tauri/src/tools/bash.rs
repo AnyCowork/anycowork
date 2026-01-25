@@ -60,8 +60,11 @@ impl<R: Runtime> Tool<R> for BashTool {
             },
         };
 
-        let allowed = ctx.permissions.request_permission(ctx.window.as_ref(), perm_req).await?;
-        
+        let allowed = ctx
+            .permissions
+            .request_permission(ctx.window.as_ref(), perm_req)
+            .await?;
+
         if !allowed {
             return Err("Permission denied by user".to_string());
         }
@@ -92,7 +95,7 @@ mod tests {
     #[test]
     fn test_verify_result() {
         let tool: Box<dyn Tool<tauri::test::MockRuntime>> = Box::new(BashTool);
-        
+
         let res_ok = json!({"exit_code": 0});
         assert!(tool.verify_result(&res_ok));
 

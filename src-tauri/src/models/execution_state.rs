@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::models::Plan;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlanUpdate {
@@ -17,12 +17,16 @@ pub struct TaskState {
 impl From<Plan> for PlanUpdate {
     fn from(plan: Plan) -> Self {
         Self {
-            tasks: plan.tasks.into_iter().map(|t| TaskState {
-                id: t.id,
-                description: t.description,
-                status: "pending".to_string(),
-                result: None,
-            }).collect(),
+            tasks: plan
+                .tasks
+                .into_iter()
+                .map(|t| TaskState {
+                    id: t.id,
+                    description: t.description,
+                    status: "pending".to_string(),
+                    result: None,
+                })
+                .collect(),
         }
     }
 }

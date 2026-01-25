@@ -1,8 +1,8 @@
-use tauri::State;
-use crate::AppState;
-use crate::models::{NewAgent, Agent, AgentDto};
+use crate::models::{Agent, AgentDto, NewAgent};
 use crate::schema;
+use crate::AppState;
 use diesel::prelude::*;
+use tauri::State;
 
 #[tauri::command]
 pub async fn create_agent(
@@ -21,7 +21,8 @@ pub async fn create_agent(
     let ai_config_json = serde_json::json!({
         "provider": ai_provider,
         "model": ai_model
-    }).to_string();
+    })
+    .to_string();
 
     let new_agent = NewAgent {
         id: uuid::Uuid::new_v4().to_string(),
@@ -69,9 +70,7 @@ pub async fn get_agents(state: State<'_, AppState>) -> Result<Vec<AgentDto>, Str
     use schema::agents::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
-    let results = agents
-        .load::<Agent>(&mut conn)
-        .map_err(|e| e.to_string())?;
+    let results = agents.load::<Agent>(&mut conn).map_err(|e| e.to_string())?;
 
     Ok(results.into_iter().map(|a| a.into_dto()).collect())
 }
@@ -116,7 +115,7 @@ pub async fn update_agent(
         agent.ai_provider = config.provider.clone(); // Update root fields too
         agent.ai_model = config.model.clone();
         agent.ai_temperature = config.temperature;
-        
+
         let json_config = serde_json::to_string(&config).map_err(|e| e.to_string())?;
         agent.ai_config = json_config;
     }
@@ -132,10 +131,10 @@ pub async fn update_agent(
     if let Some(m) = data.mcp_servers {
         agent.mcp_servers = Some(m.join(", "));
     }
-    
+
     // Execution Settings
     if let Some(settings) = data.execution_settings {
-         agent.execution_settings = Some(settings.to_string());
+        agent.execution_settings = Some(settings.to_string());
     }
 
     agent.updated_at = chrono::Utc::now().timestamp();
@@ -177,10 +176,10 @@ pub async fn chat_internal<R: Runtime>(
     message: String,
     mode: Option<String>,
 ) -> Result<String, String> {
+    use crate::models::Session;
+    use schema::agents::dsl::agents;
     use schema::sessions::dsl::id as session_id_col;
     use schema::sessions::dsl::sessions;
-    use schema::agents::dsl::agents;
-    use crate::models::Session;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -197,8 +196,8 @@ pub async fn chat_internal<R: Runtime>(
         .map_err(|_| "Agent not found".to_string())?;
 
     // 3. Save User Message
-    use schema::messages;
     use crate::models::NewMessage;
+    use schema::messages;
     let user_msg = NewMessage {
         id: uuid::Uuid::new_v4().to_string(),
         role: "user".to_string(),
@@ -266,16 +265,18 @@ pub async fn reject_action(state: State<'_, AppState>, step_id: String) -> Resul
 mod tests {
     use super::*;
     use crate::database::create_test_pool;
+    use crate::permissions::PermissionManager;
     use tauri::test::mock_builder;
     use tauri::Manager;
-    use crate::permissions::PermissionManager;
 
     fn create_app_state() -> crate::AppState {
         let pool = create_test_pool();
         crate::AppState {
             db_pool: pool,
             pending_approvals: std::sync::Arc::new(dashmap::DashMap::new()),
-            telegram_manager: std::sync::Arc::new(crate::telegram::TelegramBotManager::new(create_test_pool())),
+            telegram_manager: std::sync::Arc::new(crate::telegram::TelegramBotManager::new(
+                create_test_pool(),
+            )),
             permission_manager: std::sync::Arc::new(PermissionManager::new()),
         }
     }
@@ -293,7 +294,9 @@ mod tests {
             "Agent 1".to_string(),
             "Test Description".to_string(),
             "You are helpful".to_string(),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
         assert_eq!(agent.name, "Agent 1");
 
         // Test get_agents

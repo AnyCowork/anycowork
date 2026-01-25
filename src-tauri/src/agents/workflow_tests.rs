@@ -6,19 +6,24 @@
 #[cfg(test)]
 mod daily_workflow_tests {
     use crate::database::create_test_pool;
-    use crate::models::{NewAgent, Agent, NewSession, Session};
+    use crate::models::{Agent, NewAgent, NewSession, Session};
     use diesel::prelude::*;
     use uuid::Uuid;
 
     /// Helper to create test agent with specific personality
-    fn create_workflow_agent(pool: &crate::database::DbPool, name: &str, personality: &str) -> Agent {
+    fn create_workflow_agent(
+        pool: &crate::database::DbPool,
+        name: &str,
+        personality: &str,
+    ) -> Agent {
         use crate::schema::agents;
 
         let ai_config_json = serde_json::json!({
             "provider": "openai",
             "model": "gpt-4o",
             "temperature": 0.7
-        }).to_string();
+        })
+        .to_string();
 
         let system_prompt = match personality {
             "concise" => "You are a concise assistant. Provide brief, direct answers. Only ask questions when absolutely necessary.",
@@ -137,7 +142,10 @@ mod daily_workflow_tests {
         // Agent action: Execute search_files with path="."
 
         assert_eq!(agent.personality, Some("interactive".to_string()));
-        assert!(agent.system_prompt.unwrap().contains("clarifying questions when needed"));
+        assert!(agent
+            .system_prompt
+            .unwrap()
+            .contains("clarifying questions when needed"));
 
         println!("✓ Scenario 2: Ambiguous search - Agent asks ONE clarifying question");
     }
@@ -210,9 +218,14 @@ mod daily_workflow_tests {
         // YES: Review all recent changes proactively
 
         assert_eq!(agent.personality, Some("proactive".to_string()));
-        assert!(agent.system_prompt.unwrap().contains("Anticipate user needs"));
+        assert!(agent
+            .system_prompt
+            .unwrap()
+            .contains("Anticipate user needs"));
 
-        println!("✓ Scenario 5: Code review - Agent proactively reviews without excessive questions");
+        println!(
+            "✓ Scenario 5: Code review - Agent proactively reviews without excessive questions"
+        );
     }
 
     #[test]
@@ -347,13 +360,18 @@ mod interaction_patterns {
         ];
 
         for pattern in patterns {
-            println!("\n{}: {} turns expected", pattern.request_type, pattern.expected_turns);
+            println!(
+                "\n{}: {} turns expected",
+                pattern.request_type, pattern.expected_turns
+            );
             println!("  Example: '{}'", pattern.example);
             println!("  Needs confirmation: {}", pattern.requires_confirmation);
 
             // Validate pattern makes sense
-            assert!(pattern.expected_turns > 0 && pattern.expected_turns <= 3,
-                "Interaction should be 1-3 turns for good UX");
+            assert!(
+                pattern.expected_turns > 0 && pattern.expected_turns <= 3,
+                "Interaction should be 1-3 turns for good UX"
+            );
         }
 
         println!("\n✓ Interaction patterns validated");

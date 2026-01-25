@@ -1,7 +1,7 @@
 /// Comprehensive test suite for agent system
 use super::*;
 use crate::database::create_test_pool;
-use crate::models::{NewAgent, Agent};
+use crate::models::{Agent, NewAgent};
 use crate::permissions::PermissionManager;
 use tauri::test::mock_builder;
 use tauri::Manager;
@@ -14,7 +14,8 @@ fn create_test_agent_db(pool: &DbPool, name: &str) -> Agent {
     let ai_config_json = serde_json::json!({
         "provider": "openai",
         "model": "gpt-4o"
-    }).to_string();
+    })
+    .to_string();
 
     let new_agent = NewAgent {
         id: uuid::Uuid::new_v4().to_string(),
@@ -80,7 +81,10 @@ mod agent_creation_tests {
         assert_eq!(dto.name, agent.name);
         assert_eq!(dto.ai_config.provider, "openai");
         assert_eq!(dto.ai_config.model, "gpt-4o");
-        assert_eq!(dto.characteristics.personality, Some("professional".to_string()));
+        assert_eq!(
+            dto.characteristics.personality,
+            Some("professional".to_string())
+        );
     }
 
     #[test]
@@ -119,7 +123,9 @@ mod agent_loop_tests {
 
         let agent_loop = AgentLoop::<tauri::Wry>::new(&agent).await;
 
-        let tool_names: Vec<String> = agent_loop.tools.iter()
+        let tool_names: Vec<String> = agent_loop
+            .tools
+            .iter()
             .map(|t| t.name().to_string())
             .collect();
 
@@ -148,18 +154,18 @@ mod message_history_tests {
         assert!(matches!(history[0], Message::User { .. }));
         assert!(matches!(history[1], Message::Assistant { .. }));
         // Verify content helper works
-        assert_eq!(get_message_content(&history[0]), "\"Hello\""); // get_message_content formats with Debug which adds quotes? 
-        // Wait, optimizations.rs impl: content.iter().map(|c| format!("{:?}", c))... 
-        // String debug format adds quotes. 
-        // UserContent::Text(t) -> t is String. 
-        // Wait, format!("{:?}", c) where c is UserContent.
-        // UserContent debug likely prints variant or text?
-        // If UserContent is Enum Text(String), debug might be `Text("Hello")`.
-        // If From<String> creates Text, then yes.
-        // Let's hold on assertions if I am unsure of Debug format.
-        // But simply compiling is the goal first.
-        // I'll skip content assertion strictness or use contains.
-        // Or check `get_message_content`.
+        assert_eq!(get_message_content(&history[0]), "\"Hello\""); // get_message_content formats with Debug which adds quotes?
+                                                                   // Wait, optimizations.rs impl: content.iter().map(|c| format!("{:?}", c))...
+                                                                   // String debug format adds quotes.
+                                                                   // UserContent::Text(t) -> t is String.
+                                                                   // Wait, format!("{:?}", c) where c is UserContent.
+                                                                   // UserContent debug likely prints variant or text?
+                                                                   // If UserContent is Enum Text(String), debug might be `Text("Hello")`.
+                                                                   // If From<String> creates Text, then yes.
+                                                                   // Let's hold on assertions if I am unsure of Debug format.
+                                                                   // But simply compiling is the goal first.
+                                                                   // I'll skip content assertion strictness or use contains.
+                                                                   // Or check `get_message_content`.
     }
 
     #[test]
@@ -199,7 +205,10 @@ mod tool_integration_tests {
             let schema = tool.parameters_schema();
 
             assert!(!name.is_empty(), "Tool name should not be empty");
-            assert!(!description.is_empty(), "Tool description should not be empty");
+            assert!(
+                !description.is_empty(),
+                "Tool description should not be empty"
+            );
             assert!(schema.is_object(), "Tool schema should be a JSON object");
         }
     }
@@ -223,7 +232,11 @@ mod performance_tests {
         println!("Created 10 agents in {:?}", duration);
 
         // Should create 10 agents in less than 1 second
-        assert!(duration.as_secs() < 1, "Agent creation took too long: {:?}", duration);
+        assert!(
+            duration.as_secs() < 1,
+            "Agent creation took too long: {:?}",
+            duration
+        );
     }
 
     #[tokio::test]
@@ -241,15 +254,19 @@ mod performance_tests {
         println!("Initialized 100 agent loops in {:?}", duration);
 
         // Should initialize 100 loops in less than 1 second
-        assert!(duration.as_secs() < 1, "Agent loop initialization took too long: {:?}", duration);
+        assert!(
+            duration.as_secs() < 1,
+            "Agent loop initialization took too long: {:?}",
+            duration
+        );
     }
 }
 
 #[cfg(test)]
 mod database_tests {
     use super::*;
-    use diesel::prelude::*;
     use crate::schema::agents;
+    use diesel::prelude::*;
 
     #[test]
     fn test_agent_persistence() {

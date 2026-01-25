@@ -58,8 +58,19 @@ impl PermissionManager {
         window: Option<&tauri::WebviewWindow<R>>,
         req: PermissionRequest,
     ) -> Result<bool, String> {
-        let session_part = req.metadata.get("session_id").map(|s| format!("{}:", s)).unwrap_or_default();
-        let key = format!("{}{:?}:{}", session_part, req.permission_type, req.metadata.get("resource").unwrap_or(&"global".to_string()));
+        let session_part = req
+            .metadata
+            .get("session_id")
+            .map(|s| format!("{}:", s))
+            .unwrap_or_default();
+        let key = format!(
+            "{}{:?}:{}",
+            session_part,
+            req.permission_type,
+            req.metadata
+                .get("resource")
+                .unwrap_or(&"global".to_string())
+        );
 
         // Check cache first
         {
@@ -82,28 +93,37 @@ impl PermissionManager {
         // Emit event to frontend
         use tauri::Manager;
         if let Some(session_id) = req.metadata.get("session_id") {
-             // Emit to session channel
-             window.app_handle().emit(&format!("session:{}", session_id), serde_json::json!({
-                 "type": "permission_request",
-                 "request": req
-             })).map_err(|e| e.to_string())?;
+            // Emit to session channel
+            window
+                .app_handle()
+                .emit(
+                    &format!("session:{}", session_id),
+                    serde_json::json!({
+                        "type": "permission_request",
+                        "request": req
+                    }),
+                )
+                .map_err(|e| e.to_string())?;
         } else {
-             // Fallback to global
-             window.app_handle().emit("permission_request", &req).map_err(|e| e.to_string())?;
+            // Fallback to global
+            window
+                .app_handle()
+                .emit("permission_request", &req)
+                .map_err(|e| e.to_string())?;
         }
 
         // Wait for response
         match rx.await {
             Ok(allowed) => {
                 if allowed {
-                     // Update cache
-                     let mut cache = self.cache.lock().unwrap();
-                     cache.insert(key, true);
-                     Ok(true)
+                    // Update cache
+                    let mut cache = self.cache.lock().unwrap();
+                    cache.insert(key, true);
+                    Ok(true)
                 } else {
                     Ok(false)
                 }
-            },
+            }
             Err(_) => {
                 // Sender dropped (timeout or app close)
                 Ok(false)
@@ -118,12 +138,15 @@ impl PermissionManager {
     }
 
     pub fn reject_request(&self, request_id: &str) {
-         if let Some((_, tx)) = self.pending_requests.remove(request_id) {
+        if let Some((_, tx)) = self.pending_requests.remove(request_id) {
             let _ = tx.send(false);
         }
     }
 
     pub fn get_pending_requests(&self) -> Vec<String> {
-        self.pending_requests.iter().map(|entry| entry.key().clone()).collect()
+        self.pending_requests
+            .iter()
+            .map(|entry| entry.key().clone())
+            .collect()
     }
 }

@@ -1,12 +1,12 @@
 pub mod types;
 
-use std::process::Stdio;
-use tokio::process::Command;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use crate::mcp::types::{ClientInfo, JsonRpcRequest, JsonRpcResponse, McpInitializeParams};
 use serde_json::json;
-use crate::mcp::types::{JsonRpcRequest, JsonRpcResponse, McpInitializeParams, ClientInfo};
+use std::process::Stdio;
+use std::sync::Arc;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::process::Command;
+use tokio::sync::Mutex;
 
 pub struct McpClient {
     _process: Arc<Mutex<tokio::process::Child>>,
@@ -37,7 +37,11 @@ impl McpClient {
         })
     }
 
-    pub async fn send_request(&self, method: &str, params: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
+    pub async fn send_request(
+        &self,
+        method: &str,
+        params: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value, String> {
         let id_val;
         {
             let mut id = self.next_id.lock().await;
@@ -53,10 +57,13 @@ impl McpClient {
         };
 
         let json_str = serde_json::to_string(&request).map_err(|e| e.to_string())?;
-        
+
         {
             let mut stdin = self.stdin.lock().await;
-            stdin.write_all(json_str.as_bytes()).await.map_err(|e| e.to_string())?;
+            stdin
+                .write_all(json_str.as_bytes())
+                .await
+                .map_err(|e| e.to_string())?;
             stdin.write_all(b"\n").await.map_err(|e| e.to_string())?;
             stdin.flush().await.map_err(|e| e.to_string())?;
         }
@@ -67,23 +74,26 @@ impl McpClient {
         // MCP protocol usually sends logs/notifications.
         // We really need a background loop keying on ID.
         // For now, I'll loop reading lines until I find matching ID.
-        
+
         // This lock prevents concurrent requests from working properly unless we're lucky.
         // But for single-threaded usage (one agent step at a time), it might pass.
         let mut reader = self.stdout_reader.lock().await;
         loop {
-            let line = reader.next_line().await.map_err(|e| e.to_string())?
+            let line = reader
+                .next_line()
+                .await
+                .map_err(|e| e.to_string())?
                 .ok_or("MCP Server closed connection")?;
-            
+
             if let Ok(response) = serde_json::from_str::<JsonRpcResponse>(&line) {
-                 if let Some(resp_id) = &response.id {
-                     if resp_id.as_i64() == Some(id_val) {
-                         if let Some(error) = response.error {
-                             return Err(format!("MCP Error {}: {}", error.code, error.message));
-                         }
-                         return Ok(response.result.unwrap_or(json!(null)));
-                     }
-                 }
+                if let Some(resp_id) = &response.id {
+                    if resp_id.as_i64() == Some(id_val) {
+                        if let Some(error) = response.error {
+                            return Err(format!("MCP Error {}: {}", error.code, error.message));
+                        }
+                        return Ok(response.result.unwrap_or(json!(null)));
+                    }
+                }
             } else {
                 // Log initialization logs or notifications?
                 // println!("MCP Ignored: {}", line);
@@ -93,7 +103,7 @@ impl McpClient {
 
     pub async fn initialize(&self) -> Result<(), String> {
         let params = McpInitializeParams {
-            protocol_version: "2024-11-05".to_string(), 
+            protocol_version: "2024-11-05".to_string(),
             capabilities: json!({}),
             client_info: ClientInfo {
                 name: "AnyCowork".to_string(),
@@ -103,7 +113,7 @@ impl McpClient {
 
         let _result = self.send_request("initialize", Some(json!(params))).await?;
         // We should handle the result (server capabilities)
-        
+
         // Send initialized notification
         // Notifications don't have ID
         let notification = JsonRpcRequest {
@@ -113,9 +123,12 @@ impl McpClient {
             params: None,
         };
         let json_str = serde_json::to_string(&notification).map_err(|e| e.to_string())?;
-          {
+        {
             let mut stdin = self.stdin.lock().await;
-            stdin.write_all(json_str.as_bytes()).await.map_err(|e| e.to_string())?;
+            stdin
+                .write_all(json_str.as_bytes())
+                .await
+                .map_err(|e| e.to_string())?;
             stdin.write_all(b"\n").await.map_err(|e| e.to_string())?;
             stdin.flush().await.map_err(|e| e.to_string())?;
         }
@@ -131,10 +144,9 @@ impl McpClient {
     }
 }
 
-
-use std::collections::HashMap;
 use crate::tools::{Tool, ToolContext};
 use async_trait::async_trait;
+use std::collections::HashMap;
 
 use tauri::Runtime;
 
@@ -189,18 +201,21 @@ impl<R: Runtime> Tool<R> for McpToolAdapter {
         self.schema.clone()
     }
 
-    async fn execute(&self, args: serde_json::Value, _ctx: &ToolContext<R>) -> Result<serde_json::Value, String> {
+    async fn execute(
+        &self,
+        args: serde_json::Value,
+        _ctx: &ToolContext<R>,
+    ) -> Result<serde_json::Value, String> {
         let params = json!({
             "name": self.name,
             "arguments": args
         });
-        
+
         let result = self.client.send_request("tools/call", Some(params)).await?;
-        
+
         // MCP tools/call result structure: { content: [{type: "text", text: "..."}] }
         // We probably want to return just the text or the raw structure?
         // AgentLoop expects a Value.
         Ok(result)
     }
 }
-

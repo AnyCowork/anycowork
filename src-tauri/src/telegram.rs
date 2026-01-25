@@ -1,12 +1,12 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
-use teloxide::prelude::*;
 use diesel::prelude::*;
+use rig::client::CompletionClient;
+use rig::client::ProviderClient;
 use rig::completion::Prompt;
 use rig::providers::openai;
-use rig::client::ProviderClient;
-use rig::client::CompletionClient;
+use std::collections::HashMap;
+use std::sync::Arc;
+use teloxide::prelude::*;
+use tokio::sync::{mpsc, RwLock};
 
 use crate::database::DbPool;
 use crate::models::{Agent, TelegramConfig};
@@ -72,13 +72,18 @@ impl TelegramBotManager {
                         // Check if chat is allowed (if restrictions exist)
                         if let Some(ref allowed) = allowed_chats {
                             if !allowed.contains(&msg.chat.id.0) {
-                                log::info!("Ignoring message from unauthorized chat: {}", msg.chat.id.0);
+                                log::info!(
+                                    "Ignoring message from unauthorized chat: {}",
+                                    msg.chat.id.0
+                                );
                                 return Ok::<(), teloxide::RequestError>(());
                             }
                         }
 
                         // Send typing indicator
-                        let _ = bot.send_chat_action(msg.chat.id, teloxide::types::ChatAction::Typing).await;
+                        let _ = bot
+                            .send_chat_action(msg.chat.id, teloxide::types::ChatAction::Typing)
+                            .await;
 
                         // Process message with agent
                         match process_message_with_agent(&agent, &text).await {
@@ -218,10 +223,7 @@ async fn process_message_with_agent(agent: &Agent, user_message: &str) -> Result
     // Build the agent with system prompt (preamble)
     let ai_agent = if let Some(prompt) = &agent.system_prompt {
         if !prompt.is_empty() {
-            client
-                .agent("gpt-4")
-                .preamble(prompt)
-                .build()
+            client.agent("gpt-4").preamble(prompt).build()
         } else {
             client.agent("gpt-4").build()
         }
@@ -247,7 +249,6 @@ fn split_message(text: &str, max_len: usize) -> Vec<String> {
         if current.len() + line.len() + 1 > max_len {
             if !current.is_empty() {
                 chunks.push(current);
-
             }
             // If single line is too long, split it
             if line.len() > max_len {
@@ -318,13 +319,13 @@ mod tests {
         // "very long..." > 10. split.
         // push "very long "
         // remaining "line that..."
-        
+
         // Let's trace the actual logic in `split_message`:
-        // default max_len 4000. 
+        // default max_len 4000.
         // Here max_len=10.
-        
+
         // Line 1: "short". current="short"
-        // Line 2: "very long line...". len=33. 
+        // Line 2: "very long line...". len=33.
         // current.len() + line.len() + 1 = 5 + 33 + 1 = 39 > 10.
         // chunks.push("short")
         // line > 10? Yes.
@@ -337,7 +338,7 @@ mod tests {
         // chunks.push("tting")
         // current = "short"
         // End. push "short"
-        
+
         // Expected chunks:
         // "short"
         // "very long "
@@ -345,7 +346,7 @@ mod tests {
         // "needs spli"
         // "tting"
         // "short"
-        
+
         assert_eq!(chunks.len(), 6);
         assert_eq!(chunks[0], "short");
         assert_eq!(chunks[1], "very long ");

@@ -1,14 +1,13 @@
-use tauri::test::{mock_builder, mock_context, noop_assets};
-use tauri::{Manager, Emitter, App};
-use std::sync::Arc;
-use serde_json::json;
-use tokio::time::{sleep, Duration};
-use anycowork::AppState;
-use anycowork::commands::agents::{create_agent, chat_internal, approve_action};
+use anycowork::commands::agents::{approve_action, chat_internal, create_agent};
 use anycowork::commands::sessions::create_session;
 use anycowork::database::create_test_pool;
 use anycowork::permissions::PermissionManager;
-
+use anycowork::AppState;
+use serde_json::json;
+use std::sync::Arc;
+use tauri::test::{mock_builder, mock_context, noop_assets};
+use tauri::{App, Emitter, Manager};
+use tokio::time::{sleep, Duration};
 
 #[tokio::test]
 async fn test_e2e_agent_interaction() {
@@ -23,7 +22,7 @@ async fn test_e2e_agent_interaction() {
     let pool = create_test_pool();
     let permission_manager = Arc::new(PermissionManager::new());
     let pending_approvals = Arc::new(dashmap::DashMap::new());
-    
+
     let state = AppState {
         db_pool: pool.clone(),
         pending_approvals: pending_approvals.clone(),
@@ -40,13 +39,14 @@ async fn test_e2e_agent_interaction() {
         "E2E Agent".to_string(),
         "Robot".to_string(),
         "You are a helpful assistant.".to_string(),
-    ).await.expect("Failed to create agent");
+    )
+    .await
+    .expect("Failed to create agent");
 
     // 2.1 Create Session for that Agent
-    let session = create_session(
-        state_handle.clone().into(),
-        agent.id.clone()
-    ).await.expect("Failed to create session");
+    let session = create_session(state_handle.clone().into(), agent.id.clone())
+        .await
+        .expect("Failed to create session");
 
     // 3. Start Chat (this spawns the background task)
     let window = app.get_webview_window("main").unwrap_or_else(|| {
@@ -58,18 +58,22 @@ async fn test_e2e_agent_interaction() {
     let session_id = session.id.clone();
     let test_file_path = "e2e_test_file.txt";
     let file_path_check = test_file_path.to_string();
-    
+
     // Clean up previous run
     let _ = std::fs::remove_file(test_file_path);
 
     // Send message to create file
     let result = chat_internal(
-        window.clone(), 
+        window.clone(),
         state_handle.clone().into(),
         session_id.clone(),
-        format!("Create a file named {} with content 'interaction_verified'", test_file_path)
-    ).await;
-    
+        format!(
+            "Create a file named {} with content 'interaction_verified'",
+            test_file_path
+        ),
+    )
+    .await;
+
     if let Err(e) = &result {
         println!("chat_internal error: {}", e);
     }
@@ -84,7 +88,7 @@ async fn test_e2e_agent_interaction() {
             if !requests.is_empty() {
                 println!("E2E Poll: Found pending requests: {:?}", requests);
                 for req_id in requests {
-                    println!("E2E Poll: Approving request: {}", req_id); 
+                    println!("E2E Poll: Approving request: {}", req_id);
                     pm.approve_request(&req_id);
                 }
             } else if i % 5 == 0 {
@@ -97,14 +101,15 @@ async fn test_e2e_agent_interaction() {
 
     // We need to wait for the file to exist.
     let mut file_exists = false;
-    for _ in 0..60 { // Wait up to 60s (LLM might be slow)
+    for _ in 0..60 {
+        // Wait up to 60s (LLM might be slow)
         if std::fs::metadata(&file_path_check).is_ok() {
             file_exists = true;
             break;
         }
         sleep(Duration::from_secs(1)).await;
     }
-    
+
     assert!(file_exists, "File was not created by the agent");
 
     // Cleanup

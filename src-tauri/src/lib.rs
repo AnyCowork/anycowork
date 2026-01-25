@@ -1,21 +1,21 @@
-pub mod schema;
-pub mod models;
-pub mod database;
 pub mod agents;
-pub mod events;
-pub mod tools;
-pub mod permissions;
-pub mod telegram;
 pub mod commands;
+pub mod database;
+pub mod events;
 pub mod mcp;
+pub mod models;
+pub mod permissions;
+pub mod schema;
 pub mod snapshots;
+pub mod telegram;
+pub mod tools;
 
-use database::DbPool;
-use std::sync::Arc;
-use tokio::sync::oneshot;
 use dashmap::DashMap;
-use telegram::TelegramBotManager;
+use database::DbPool;
 use permissions::PermissionManager;
+use std::sync::Arc;
+use telegram::TelegramBotManager;
+use tokio::sync::oneshot;
 
 // AppState definition
 pub struct AppState {

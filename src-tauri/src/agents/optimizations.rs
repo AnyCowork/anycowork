@@ -63,7 +63,7 @@ impl ToolResultCache {
 
     /// Generate cache key from tool name and arguments
     fn generate_key(tool_name: &str, args: &serde_json::Value) -> String {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(tool_name.as_bytes());
         hasher.update(args.to_string().as_bytes());
@@ -174,10 +174,7 @@ where
 }
 
 /// Trim history to keep only recent messages
-pub fn trim_history(
-    history: &mut Vec<rig::completion::Message>,
-    max_size: usize,
-) {
+pub fn trim_history(history: &mut Vec<rig::completion::Message>, max_size: usize) {
     if history.len() > max_size {
         // Keep the most recent messages
         let drain_count = history.len() - max_size;
@@ -200,16 +197,14 @@ pub fn estimate_tokens(text: &str) -> usize {
 
 /// Calculate total tokens in history
 pub fn calculate_history_tokens(history: &[rig::completion::Message]) -> usize {
-    history.iter()
+    history
+        .iter()
         .map(|msg| estimate_tokens(&get_message_content(msg)))
         .sum()
 }
 
 /// Optimize history by removing older messages if token count is too high
-pub fn optimize_history_by_tokens(
-    history: &mut Vec<rig::completion::Message>,
-    max_tokens: usize,
-) {
+pub fn optimize_history_by_tokens(history: &mut Vec<rig::completion::Message>, max_tokens: usize) {
     let mut total_tokens = calculate_history_tokens(history);
 
     while total_tokens > max_tokens && !history.is_empty() {
@@ -296,12 +291,16 @@ pub fn truncate_message_content(content: &str, role: &str) -> String {
 /// Extract content from message (handling Enum variants)
 pub fn get_message_content(msg: &rig::completion::Message) -> String {
     match msg {
-        rig::completion::Message::User { content, .. } => {
-            content.iter().map(|c| format!("{:?}", c)).collect::<Vec<_>>().join(" ")
-        },
-        rig::completion::Message::Assistant { content, .. } => {
-             content.iter().map(|c| format!("{:?}", c)).collect::<Vec<_>>().join(" ")
-        },
+        rig::completion::Message::User { content, .. } => content
+            .iter()
+            .map(|c| format!("{:?}", c))
+            .collect::<Vec<_>>()
+            .join(" "),
+        rig::completion::Message::Assistant { content, .. } => content
+            .iter()
+            .map(|c| format!("{:?}", c))
+            .collect::<Vec<_>>()
+            .join(" "),
     }
 }
 
@@ -311,9 +310,9 @@ pub fn create_user_message(content: String) -> rig::completion::Message {
 
 pub fn create_assistant_message(content: String) -> rig::completion::Message {
     let content = rig::completion::message::AssistantContent::from(content);
-    rig::completion::Message::Assistant { 
+    rig::completion::Message::Assistant {
         id: Some(Uuid::new_v4().to_string()),
-        content: rig::one_or_many::OneOrMany::one(content) 
+        content: rig::one_or_many::OneOrMany::one(content),
     }
 }
 
@@ -364,10 +363,22 @@ mod tests {
     #[test]
     fn test_trim_history() {
         let mut history = vec![
-            rig::completion::Message { role: "user".to_string(), content: "msg1".to_string() },
-            rig::completion::Message { role: "assistant".to_string(), content: "msg2".to_string() },
-            rig::completion::Message { role: "user".to_string(), content: "msg3".to_string() },
-            rig::completion::Message { role: "assistant".to_string(), content: "msg4".to_string() },
+            rig::completion::Message {
+                role: "user".to_string(),
+                content: "msg1".to_string(),
+            },
+            rig::completion::Message {
+                role: "assistant".to_string(),
+                content: "msg2".to_string(),
+            },
+            rig::completion::Message {
+                role: "user".to_string(),
+                content: "msg3".to_string(),
+            },
+            rig::completion::Message {
+                role: "assistant".to_string(),
+                content: "msg4".to_string(),
+            },
         ];
 
         trim_history(&mut history, 2);
@@ -390,15 +401,15 @@ mod tests {
         let mut history = vec![
             rig::completion::Message {
                 role: "user".to_string(),
-                content: "a".repeat(1000)
+                content: "a".repeat(1000),
             },
             rig::completion::Message {
                 role: "assistant".to_string(),
-                content: "b".repeat(1000)
+                content: "b".repeat(1000),
             },
             rig::completion::Message {
                 role: "user".to_string(),
-                content: "c".repeat(100)
+                content: "c".repeat(100),
             },
         ];
 
@@ -421,7 +432,8 @@ mod tests {
             || async { Ok(serde_json::json!({"status": "ok"})) },
             &config,
             None,
-        ).await;
+        )
+        .await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().success);
@@ -455,7 +467,8 @@ mod tests {
             },
             &config,
             None,
-        ).await;
+        )
+        .await;
 
         assert!(result.is_ok());
         assert_eq!(attempt_count.load(std::sync::atomic::Ordering::SeqCst), 2);

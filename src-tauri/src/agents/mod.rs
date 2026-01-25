@@ -1,53 +1,49 @@
-pub mod processor;
 pub mod optimizations;
+pub mod processor;
 
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod workflow_tests;
 
-use rig::completion::Prompt;
-use rig::completion::Chat;
+use crate::database::DbPool;
+use crate::events::{AgentEvent, ExecutionJob, ExecutionStep};
+use crate::models::Agent as DbAgent;
+use crate::permissions::PermissionManager;
+use crate::tools::{
+    bash::BashTool, filesystem::FilesystemTool, search::SearchTool, Tool, ToolContext,
+};
+use diesel::prelude::*;
+use jsonschema::JSONSchema;
+use log::error;
+use optimizations::{
+    create_assistant_message, create_user_message, get_message_content, optimize_history_by_tokens,
+    truncate_message_content, truncate_tool_result, MAX_HISTORY_TOKENS,
+};
+use processor::{StreamChunk, StreamProcessor};
 use rig::agent::Agent;
+use rig::client::CompletionClient;
+use rig::client::ProviderClient;
+use rig::completion::Chat;
 use rig::completion::CompletionModel;
-use rig::providers::openai;
+use rig::completion::Prompt;
 use rig::providers::anthropic;
 use rig::providers::gemini;
-use rig::client::ProviderClient;
-use rig::client::CompletionClient;
+use rig::providers::openai;
 use serde_json::{json, Value};
-use log::error;
 use std::sync::Arc;
-use tokio::sync::oneshot;
-use crate::models::Agent as DbAgent;
-use crate::events::{AgentEvent, ExecutionJob, ExecutionStep};
-use uuid::Uuid;
-use crate::database::DbPool;
-use diesel::prelude::*;
 use tauri::Emitter;
-use crate::tools::{Tool, ToolContext, filesystem::FilesystemTool, search::SearchTool, bash::BashTool};
-use crate::permissions::PermissionManager;
-use processor::{StreamProcessor, StreamChunk};
-use jsonschema::JSONSchema;
-use optimizations::{
-    truncate_tool_result,
-    truncate_message_content,
-    optimize_history_by_tokens,
-    get_message_content,
-    create_user_message,
-    create_assistant_message,
-    MAX_HISTORY_TOKENS,
-};
-
+use tokio::sync::oneshot;
+use uuid::Uuid;
 
 use tauri::Runtime;
 
 pub struct AgentLoop<R: Runtime> {
     pub agent_id: String,
     pub session_id: String,
-    pub model: String, 
-    pub provider: String, 
-    pub history: Vec<rig::completion::Message>, 
+    pub model: String,
+    pub provider: String,
+    pub history: Vec<rig::completion::Message>,
     pub tools: Vec<Box<dyn Tool<R>>>,
     pub snapshot_manager: crate::snapshots::SnapshotManager,
 }
@@ -68,7 +64,9 @@ impl<R: Runtime> AgentLoop<R> {
             provider: agent_db.ai_provider.clone(),
             history: vec![],
             tools,
-            snapshot_manager: crate::snapshots::SnapshotManager::new(std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))),
+            snapshot_manager: crate::snapshots::SnapshotManager::new(
+                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+            ),
         }
     }
 
@@ -92,22 +90,29 @@ impl<R: Runtime> AgentLoop<R> {
             created_at: chrono::Utc::now().to_rfc3339(),
         };
 
-        let _ = Emitter::emit(&window, &format!("session:{}", self.session_id), AgentEvent::JobStarted {
-            job: job.clone(),
-        });
+        let _ = Emitter::emit(
+            &window,
+            &format!("session:{}", self.session_id),
+            AgentEvent::JobStarted { job: job.clone() },
+        );
 
         // 1. Add User Message to History
         let truncated_user_message = truncate_message_content(&user_message, "user");
-        self.history.push(create_user_message(truncated_user_message));
+        self.history
+            .push(create_user_message(truncated_user_message));
 
         // Prepare tool definitions
-        let tools_desc = self.tools.iter().map(|t| {
-            json!({
-                "name": t.name(),
-                "description": t.description(),
-                "parameters": t.parameters_schema()
+        let tools_desc = self
+            .tools
+            .iter()
+            .map(|t| {
+                json!({
+                    "name": t.name(),
+                    "description": t.description(),
+                    "parameters": t.parameters_schema()
+                })
             })
-        }).collect::<Vec<_>>();
+            .collect::<Vec<_>>();
 
         // Load tool use prompt template
         // Using runtime read as per user request for data separation
@@ -117,62 +122,114 @@ impl<R: Runtime> AgentLoop<R> {
 
         let mut env = minijinja::Environment::new();
         env.add_template("tool_use", &template_str).unwrap(); // Panic if template invalid (should only happen in dev)
-        
+
         let tools_json = serde_json::to_string_pretty(&tools_desc).unwrap();
         let tmpl = env.get_template("tool_use").unwrap();
-        
+
         // Render prompt (Plan context can be passed here if extended)
-        let tools_prompt = tmpl.render(minijinja::context! {
-            tools_desc => tools_json,
-            plan => Value::Null,
-            current_task => Value::Null
-        }).unwrap();
+        let tools_prompt = tmpl
+            .render(minijinja::context! {
+                tools_desc => tools_json,
+                plan => Value::Null,
+                current_task => Value::Null
+            })
+            .unwrap();
 
         // Select and Build Agent based on Provider
-        // Dispatching to a common handler or using Box<dyn Chat> would be ideal, 
+        // Dispatching to a common handler or using Box<dyn Chat> would be ideal,
         // but Rig agents are typed by their completion model.
         // We will match and dispatch.
-        
+
         match self.provider.as_str() {
             "openai" => {
                 let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
-                if api_key.is_empty() { self.send_error(&window, "Error: OPENAI_API_KEY not set", &job); return; }
+                if api_key.is_empty() {
+                    self.send_error(&window, "Error: OPENAI_API_KEY not set", &job);
+                    return;
+                }
                 let client = openai::Client::from_env();
                 let agent = client.agent(&self.model).preamble(&tools_prompt).build();
-                self.run_loop(agent, &window, &job, permission_manager, &db_pool, user_message).await;
+                self.run_loop(
+                    agent,
+                    &window,
+                    &job,
+                    permission_manager,
+                    &db_pool,
+                    user_message,
+                )
+                .await;
             }
             "gemini" => {
                 let api_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
-                if api_key.is_empty() { self.send_error(&window, "Error: GEMINI_API_KEY not set", &job); return; }
+                if api_key.is_empty() {
+                    self.send_error(&window, "Error: GEMINI_API_KEY not set", &job);
+                    return;
+                }
                 let client = gemini::Client::from_env();
                 let agent = client.agent(&self.model).preamble(&tools_prompt).build();
-                self.run_loop(agent, &window, &job, permission_manager, &db_pool, user_message).await;
+                self.run_loop(
+                    agent,
+                    &window,
+                    &job,
+                    permission_manager,
+                    &db_pool,
+                    user_message,
+                )
+                .await;
             }
-             "anthropic" => {
+            "anthropic" => {
                 let api_key = std::env::var("ANTHROPIC_API_KEY").unwrap_or_default();
-                if api_key.is_empty() { self.send_error(&window, "Error: ANTHROPIC_API_KEY not set", &job); return; }
+                if api_key.is_empty() {
+                    self.send_error(&window, "Error: ANTHROPIC_API_KEY not set", &job);
+                    return;
+                }
                 let client = anthropic::Client::from_env();
                 let agent = client.agent(&self.model).preamble(&tools_prompt).build();
-                self.run_loop(agent, &window, &job, permission_manager, &db_pool, user_message).await;
+                self.run_loop(
+                    agent,
+                    &window,
+                    &job,
+                    permission_manager,
+                    &db_pool,
+                    user_message,
+                )
+                .await;
             }
             _ => {
-                 self.send_error(&window, &format!("Error: Unsupported provider '{}'", self.provider), &job);
+                self.send_error(
+                    &window,
+                    &format!("Error: Unsupported provider '{}'", self.provider),
+                    &job,
+                );
             }
         }
     }
 
     fn send_error(&self, window: &tauri::WebviewWindow<R>, msg: &str, job: &ExecutionJob) {
-        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Token { content: msg.to_string() });
-        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::JobCompleted {
-            job: ExecutionJob { status: "failed".to_string(), ..job.clone() },
-            message: msg.to_string(),
-        });
+        let _ = Emitter::emit(
+            window,
+            &format!("session:{}", self.session_id),
+            AgentEvent::Token {
+                content: msg.to_string(),
+            },
+        );
+        let _ = Emitter::emit(
+            window,
+            &format!("session:{}", self.session_id),
+            AgentEvent::JobCompleted {
+                job: ExecutionJob {
+                    status: "failed".to_string(),
+                    ..job.clone()
+                },
+                message: msg.to_string(),
+            },
+        );
     }
 
     // Generic run loop using the Agent struct
     pub async fn run_loop<M: CompletionModel>(
         &mut self,
-        agent: Agent<M>, 
+        agent: Agent<M>,
         window: &tauri::WebviewWindow<R>,
         job: &ExecutionJob,
         permission_manager: Arc<PermissionManager>,
@@ -188,13 +245,13 @@ impl<R: Runtime> AgentLoop<R> {
                 break;
             }
             steps_count += 1;
-            
+
             let prompt_msg = if let Some(last_msg) = self.history.pop() {
                 last_msg
             } else {
                 create_user_message("continue".to_string())
             };
-            
+
             let current_history = self.history.clone();
 
             // Put prompt back into history for next iteration/persistence logic
@@ -206,24 +263,41 @@ impl<R: Runtime> AgentLoop<R> {
             let max_chat_attempts = 3;
             let response = loop {
                 chat_attempts += 1;
-                match agent.chat(&get_message_content(&prompt_msg), current_history.clone()).await {
+                match agent
+                    .chat(&get_message_content(&prompt_msg), current_history.clone())
+                    .await
+                {
                     Ok(r) => {
                         break r.to_string();
-                    },
+                    }
                     Err(e) => {
                         error!("Agent chat attempt {} failed: {}", chat_attempts, e);
                         if chat_attempts >= max_chat_attempts {
-                            let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Token {
-                                content: format!("Error: {} after {} attempts.", e, max_chat_attempts),
-                            });
+                            let _ = Emitter::emit(
+                                window,
+                                &format!("session:{}", self.session_id),
+                                AgentEvent::Token {
+                                    content: format!(
+                                        "Error: {} after {} attempts.",
+                                        e, max_chat_attempts
+                                    ),
+                                },
+                            );
                             return; // Fatal error
                         }
-                        
+
                         let wait_ms = 1000 * (2u64.pow(chat_attempts as u32 - 1));
-                        let retry_msg = format!("\n⚠️ Connection issue. Retrying in {}s... (Attempt {}/{})\n", wait_ms as f64 / 1000.0, chat_attempts + 1, max_chat_attempts);
-                        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
-                            message: retry_msg,
-                        });
+                        let retry_msg = format!(
+                            "\n⚠️ Connection issue. Retrying in {}s... (Attempt {}/{})\n",
+                            wait_ms as f64 / 1000.0,
+                            chat_attempts + 1,
+                            max_chat_attempts
+                        );
+                        let _ = Emitter::emit(
+                            window,
+                            &format!("session:{}", self.session_id),
+                            AgentEvent::Thinking { message: retry_msg },
+                        );
                         tokio::time::sleep(tokio::time::Duration::from_millis(wait_ms)).await;
                     }
                 }
@@ -233,19 +307,24 @@ impl<R: Runtime> AgentLoop<R> {
             if let Some(json_start) = response.find('{') {
                 if response[json_start..].contains("\"tool\"") {
                     let thinking_text = response[..json_start].trim();
-                     if !thinking_text.is_empty() {
-                        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
-                            message: thinking_text.to_string(),
-                        });
+                    if !thinking_text.is_empty() {
+                        let _ = Emitter::emit(
+                            window,
+                            &format!("session:{}", self.session_id),
+                            AgentEvent::Thinking {
+                                message: thinking_text.to_string(),
+                            },
+                        );
                     }
                 }
             }
 
             // Attempt to parse tool calls
             let tool_calls = extract_tool_calls(&response);
-            
+
             // Filter to find valid tool calls first to decide if we should enter tool execution mode
-            let valid_calls: Vec<(String, Value, &Box<dyn Tool<R>>)> = tool_calls.into_iter()
+            let valid_calls: Vec<(String, Value, &Box<dyn Tool<R>>)> = tool_calls
+                .into_iter()
                 .filter_map(|tc| {
                     let tool_name = tc.get("tool")?.as_str()?.to_string();
                     let args = tc.get("args")?.clone();
@@ -258,16 +337,22 @@ impl<R: Runtime> AgentLoop<R> {
                 // Persist the Assistant's Response (with all tool calls) ONCE
                 let truncated_response = truncate_message_content(&response, "assistant");
                 save_message(db_pool, "assistant", &response, &self.session_id, None);
-                self.history.push(create_assistant_message(truncated_response));
+                self.history
+                    .push(create_assistant_message(truncated_response));
 
                 for (tool_name, args, tool) in valid_calls {
                     // VALIDATION START
                     let schema_json = tool.parameters_schema();
-                    let compiled_schema = JSONSchema::compile(&schema_json).unwrap_or_else(|e| panic!("Invalid schema for tool {}: {}", tool_name, e));
-                    
+                    let compiled_schema = JSONSchema::compile(&schema_json)
+                        .unwrap_or_else(|e| panic!("Invalid schema for tool {}: {}", tool_name, e));
+
                     if let Err(errors) = compiled_schema.validate(&args) {
-                        let error_msg = errors.map(|e| e.to_string()).collect::<Vec<String>>().join(", ");
-                        let fail_msg = format!("Tool argument validation failed (schema): {}", error_msg);
+                        let error_msg = errors
+                            .map(|e| e.to_string())
+                            .collect::<Vec<String>>()
+                            .join(", ");
+                        let fail_msg =
+                            format!("Tool argument validation failed (schema): {}", error_msg);
 
                         let step_id = Uuid::new_v4().to_string();
                         let step = ExecutionStep {
@@ -280,29 +365,44 @@ impl<R: Runtime> AgentLoop<R> {
                             created_at: chrono::Utc::now().to_rfc3339(),
                         };
 
-                            let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepStarted {
-                            job: job.clone(),
-                            step: step.clone(),
-                        });
-                            let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepCompleted {
-                            job: job.clone(),
-                            step: step.clone(),
-                        });
+                        let _ = Emitter::emit(
+                            window,
+                            &format!("session:{}", self.session_id),
+                            AgentEvent::StepStarted {
+                                job: job.clone(),
+                                step: step.clone(),
+                            },
+                        );
+                        let _ = Emitter::emit(
+                            window,
+                            &format!("session:{}", self.session_id),
+                            AgentEvent::StepCompleted {
+                                job: job.clone(),
+                                step: step.clone(),
+                            },
+                        );
 
-                            // Add failure to history and DB
-                        let fail_msg_full = format!("Tool '{}' validation failed: {}", tool_name, fail_msg);
+                        // Add failure to history and DB
+                        let fail_msg_full =
+                            format!("Tool '{}' validation failed: {}", tool_name, fail_msg);
                         let truncated_fail_msg = truncate_message_content(&fail_msg_full, "user");
-                        save_message(db_pool, "tool", &fail_msg_full, &self.session_id, Some(args.to_string()));
+                        save_message(
+                            db_pool,
+                            "tool",
+                            &fail_msg_full,
+                            &self.session_id,
+                            Some(args.to_string()),
+                        );
                         self.history.push(create_user_message(truncated_fail_msg));
 
                         continue;
                     }
-                    
+
                     // 2. Logic Validation
                     if let Err(e) = tool.validate_args(&args).await {
-                            let fail_msg = format!("Tool argument validation failed (logic): {}", e);
-                            let step_id = Uuid::new_v4().to_string();
-                            let step = ExecutionStep {
+                        let fail_msg = format!("Tool argument validation failed (logic): {}", e);
+                        let step_id = Uuid::new_v4().to_string();
+                        let step = ExecutionStep {
                             id: step_id.clone(),
                             tool_name: tool_name.to_string(),
                             tool_args: args.clone(),
@@ -311,18 +411,32 @@ impl<R: Runtime> AgentLoop<R> {
                             requires_approval: false,
                             created_at: chrono::Utc::now().to_rfc3339(),
                         };
-                            let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepStarted { job: job.clone(), step: step.clone() });
-                            
-                            // Add failure to history and DB
-                            let fail_msg_full = format!("Tool '{}' validation failed: {}", tool_name, fail_msg);
-                            let truncated_fail_msg = truncate_message_content(&fail_msg_full, "user");
-                            save_message(db_pool, "tool", &fail_msg_full, &self.session_id, Some(args.to_string()));
-                            self.history.push(create_user_message(truncated_fail_msg));
-                            continue;
+                        let _ = Emitter::emit(
+                            window,
+                            &format!("session:{}", self.session_id),
+                            AgentEvent::StepStarted {
+                                job: job.clone(),
+                                step: step.clone(),
+                            },
+                        );
+
+                        // Add failure to history and DB
+                        let fail_msg_full =
+                            format!("Tool '{}' validation failed: {}", tool_name, fail_msg);
+                        let truncated_fail_msg = truncate_message_content(&fail_msg_full, "user");
+                        save_message(
+                            db_pool,
+                            "tool",
+                            &fail_msg_full,
+                            &self.session_id,
+                            Some(args.to_string()),
+                        );
+                        self.history.push(create_user_message(truncated_fail_msg));
+                        continue;
                     }
 
                     // VALIDATION END
-                    
+
                     let step_id = Uuid::new_v4().to_string();
                     let step = ExecutionStep {
                         id: step_id.clone(),
@@ -335,35 +449,54 @@ impl<R: Runtime> AgentLoop<R> {
                     };
 
                     // 2. Execution
-                    let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepStarted {
-                        job: job.clone(),
-                        step: step.clone(),
-                    });
+                    let _ = Emitter::emit(
+                        window,
+                        &format!("session:{}", self.session_id),
+                        AgentEvent::StepStarted {
+                            job: job.clone(),
+                            step: step.clone(),
+                        },
+                    );
 
-                    let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
-                        message: format!("Executing {}...", tool_name),
-                    });
-                    
+                    let _ = Emitter::emit(
+                        window,
+                        &format!("session:{}", self.session_id),
+                        AgentEvent::Thinking {
+                            message: format!("Executing {}...", tool_name),
+                        },
+                    );
+
                     let ctx = ToolContext {
                         permissions: permission_manager.clone(),
-                        window: Some(window.clone()), 
+                        window: Some(window.clone()),
                         session_id: self.session_id.clone(),
                     };
 
                     // SNAPSHOT START
                     let pre_snapshot = self.snapshot_manager.create_snapshot().ok();
-                
-                        let execution_result = tool.execute(args.clone(), &ctx).await.unwrap_or_else(|e| Value::String(format!("Error: {}", e)));
-                    
+
+                    let execution_result = tool
+                        .execute(args.clone(), &ctx)
+                        .await
+                        .unwrap_or_else(|e| Value::String(format!("Error: {}", e)));
+
                     // SNAPSHOT END & DIFF
                     if let Some(pre) = pre_snapshot {
                         if let Ok(post) = self.snapshot_manager.create_snapshot() {
                             let diff = self.snapshot_manager.diff(&pre, &post);
-                            if !diff.new_files.is_empty() || !diff.modified_files.is_empty() || !diff.deleted_files.is_empty() {
-                                    let diff_msg = format!("Workspace Changes: +{:?} *{:?} -{:?}", diff.new_files, diff.modified_files, diff.deleted_files);
-                                    let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
-                                    message: diff_msg,
-                                });
+                            if !diff.new_files.is_empty()
+                                || !diff.modified_files.is_empty()
+                                || !diff.deleted_files.is_empty()
+                            {
+                                let diff_msg = format!(
+                                    "Workspace Changes: +{:?} *{:?} -{:?}",
+                                    diff.new_files, diff.modified_files, diff.deleted_files
+                                );
+                                let _ = Emitter::emit(
+                                    window,
+                                    &format!("session:{}", self.session_id),
+                                    AgentEvent::Thinking { message: diff_msg },
+                                );
                             }
                         }
                     }
@@ -371,30 +504,41 @@ impl<R: Runtime> AgentLoop<R> {
                     // 3. Verification
                     let success = tool.verify_result(&execution_result);
                     let status = if success { "completed" } else { "failed" };
-                    
+
                     // 4. Summarization
                     let mut final_result = execution_result.to_string();
 
                     // Smart truncation (Safety to prevent token overflow)
                     final_result = truncate_tool_result(&tool_name, &final_result);
 
-                    let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepCompleted {
-                        job: job.clone(),
-                        step: ExecutionStep {
-                            status: status.to_string(),
-                            result: Some(final_result.clone()),
-                            ..step
+                    let _ = Emitter::emit(
+                        window,
+                        &format!("session:{}", self.session_id),
+                        AgentEvent::StepCompleted {
+                            job: job.clone(),
+                            step: ExecutionStep {
+                                status: status.to_string(),
+                                result: Some(final_result.clone()),
+                                ..step
+                            },
                         },
-                    });
+                    );
 
                     // Add result to history and DB
                     let tool_result_msg = format!("Tool '{}' result: {}", tool_name, final_result);
                     let truncated_tool_result = truncate_message_content(&tool_result_msg, "user");
-                    
+
                     // IMPORTANT: Save as 'tool' role with args as metadata
-                    save_message(db_pool, "tool", &tool_result_msg, &self.session_id, Some(args.to_string()));
-                    
-                    self.history.push(create_user_message(truncated_tool_result));
+                    save_message(
+                        db_pool,
+                        "tool",
+                        &tool_result_msg,
+                        &self.session_id,
+                        Some(args.to_string()),
+                    );
+
+                    self.history
+                        .push(create_user_message(truncated_tool_result));
                 }
 
                 // Optimize history to prevent context overflow
@@ -402,20 +546,28 @@ impl<R: Runtime> AgentLoop<R> {
 
                 continue; // Loop again
             }
-            
+
             // Not a tool call implies text response
             final_response_text = response.clone();
             let mut processor = StreamProcessor::new();
             Self::stream_text(window, &self.session_id, &response, &mut processor).await;
 
             // Add to history with truncation
-            let truncated_final_response = truncate_message_content(&final_response_text, "assistant");
-            self.history.push(create_assistant_message(truncated_final_response));
+            let truncated_final_response =
+                truncate_message_content(&final_response_text, "assistant");
+            self.history
+                .push(create_assistant_message(truncated_final_response));
             break;
         }
 
         // Save to DB
-        save_message(db_pool, "assistant", &final_response_text, &self.session_id, None);
+        save_message(
+            db_pool,
+            "assistant",
+            &final_response_text,
+            &self.session_id,
+            None,
+        );
 
         let final_msg = if final_response_text.is_empty() {
             "Task completed successfully. All requested actions have been executed.".to_string()
@@ -428,44 +580,45 @@ impl<R: Runtime> AgentLoop<R> {
         // 1. New Chat (Default) - handled by UI if title is Null
         // 2. First Message (History < 3) - Set to first message
         // 3. LLM Generated (History >= 3) - Generate summary
-        
+
         let history_len = self.history.len();
-        
+
         // We only check DB if we are in the fallback stage (< 3) to strictly avoid overwriting
         // OR if we are in the generation window (>= 3)
-        
+
         if history_len < 3 {
-             // FALLBACK STAGE: Set title to User Message if it's currently default
-             use crate::schema::sessions;
-             let should_fallback = if let Ok(mut conn) = db_pool.get() {
+            // FALLBACK STAGE: Set title to User Message if it's currently default
+            use crate::schema::sessions;
+            let should_fallback = if let Ok(mut conn) = db_pool.get() {
                 let current_title: Option<String> = sessions::table
                     .filter(sessions::id.eq(&self.session_id))
                     .select(sessions::title)
                     .first(&mut conn)
                     .unwrap_or(None);
-                
+
                 // If title is None, empty, or "New Chat" -> Update it
                 match current_title {
                     Some(t) => t.is_empty() || t == "New Chat",
-                    None => true
+                    None => true,
                 }
-             } else { false };
+            } else {
+                false
+            };
 
-             if should_fallback {
+            if should_fallback {
                 let fallback_title = user_message.chars().take(30).collect::<String>();
                 if let Ok(mut conn) = db_pool.get() {
-                     let _ = diesel::update(sessions::table.filter(sessions::id.eq(&self.session_id)))
-                         .set(sessions::title.eq(&fallback_title))
-                         .execute(&mut conn);
-                     let _ = Emitter::emit(window, "sessions_updated", ());
+                    let _ =
+                        diesel::update(sessions::table.filter(sessions::id.eq(&self.session_id)))
+                            .set(sessions::title.eq(&fallback_title))
+                            .execute(&mut conn);
+                    let _ = Emitter::emit(window, "sessions_updated", ());
                 }
-             }
-        } 
-        
-        else if history_len >= 3 && history_len <= 10 {
+            }
+        } else if (3..=10).contains(&history_len) {
             // LLM GENERATION STAGE: Generate summary
             // We do this a few times (Turn 2, 3, 4) to refine the title as context grows, then stop to stay stable.
-            
+
             let session_id_clone = self.session_id.clone();
             let model_clone = self.model.clone();
             let provider_clone = self.provider.clone();
@@ -475,7 +628,7 @@ impl<R: Runtime> AgentLoop<R> {
 
             tauri::async_runtime::spawn(async move {
                 let preamble = "You are a helpful assistant. Generate a very concise title (3-5 words) for a chat session based on the interaction so far. Do not use quotes. Do not say 'Title:'. Just the title.";
-                
+
                 let title_result = match provider_clone.as_str() {
                     "openai" => {
                         let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
@@ -483,73 +636,107 @@ impl<R: Runtime> AgentLoop<R> {
                             let client = openai::Client::from_env();
                             let agent = client.agent(&model_clone).preamble(preamble).build();
                             agent.prompt(&user_query).await.ok() // Using user_query as prompt trigger, ideally send history but simple prompt often works for title
-                        } else { None }
-                    },
+                        } else {
+                            None
+                        }
+                    }
                     "gemini" => {
                         let api_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
                         if !api_key.is_empty() {
                             let client = gemini::Client::from_env();
                             // Use Flash for titles if possible for speed, otherwise fallback to current model
-                            let title_model = if model_clone.contains("flash") { model_clone.clone() } else { "gemini-1.5-flash".to_string() };
+                            let title_model = if model_clone.contains("flash") {
+                                model_clone.clone()
+                            } else {
+                                "gemini-1.5-flash".to_string()
+                            };
                             let agent = client.agent(&title_model).preamble(preamble).build();
                             agent.prompt(&user_query).await.ok()
-                        } else { None }
-                    },
+                        } else {
+                            None
+                        }
+                    }
                     "anthropic" => {
                         let api_key = std::env::var("ANTHROPIC_API_KEY").unwrap_or_default();
                         if !api_key.is_empty() {
                             let client = anthropic::Client::from_env();
-                             // Use Haiku for titles for speed
-                            let title_model = "claude-3-haiku-20240307"; 
+                            // Use Haiku for titles for speed
+                            let title_model = "claude-3-haiku-20240307";
                             let agent = client.agent(title_model).preamble(preamble).build();
                             agent.prompt(&user_query).await.ok()
-                        } else { None }
-                    },
-                    _ => None
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
                 };
 
                 if let Some(title) = title_result {
-                        let clean_title = title.trim().trim_matches('"').to_string();
-                        if !clean_title.is_empty() {
-                            // Update DB
-                            use crate::schema::sessions;
-                            if let Ok(mut conn) = db_pool_clone.get() {
-                                let _ = diesel::update(sessions::table.filter(sessions::id.eq(&session_id_clone)))
-                                    .set(sessions::title.eq(&clean_title))
-                                    .execute(&mut conn);
-                                
-                                    // Emit update event to refresh sidebar
-                                    let _ = Emitter::emit(&window_clone, "sessions_updated", ());
-                            }
+                    let clean_title = title.trim().trim_matches('"').to_string();
+                    if !clean_title.is_empty() {
+                        // Update DB
+                        use crate::schema::sessions;
+                        if let Ok(mut conn) = db_pool_clone.get() {
+                            let _ = diesel::update(
+                                sessions::table.filter(sessions::id.eq(&session_id_clone)),
+                            )
+                            .set(sessions::title.eq(&clean_title))
+                            .execute(&mut conn);
+
+                            // Emit update event to refresh sidebar
+                            let _ = Emitter::emit(&window_clone, "sessions_updated", ());
                         }
+                    }
                 }
             });
         }
 
-        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::JobCompleted {
-            job: ExecutionJob { status: "completed".to_string(), ..job.clone() },
-            message: final_msg,
-        });
+        let _ = Emitter::emit(
+            window,
+            &format!("session:{}", self.session_id),
+            AgentEvent::JobCompleted {
+                job: ExecutionJob {
+                    status: "completed".to_string(),
+                    ..job.clone()
+                },
+                message: final_msg,
+            },
+        );
     }
-    
+
     // Keep helper
-    async fn stream_text(window: &tauri::WebviewWindow<R>, session_id: &str, text: &str, processor: &mut StreamProcessor) {
+    async fn stream_text(
+        window: &tauri::WebviewWindow<R>,
+        session_id: &str,
+        text: &str,
+        processor: &mut StreamProcessor,
+    ) {
         // Feed text to processor as chunks (simulating token stream for now since we don't have real stream yet)
         // In real impl, this would be inside the loop receiving tokens from LLM.
         // Here we just split by space to simulate.
         let words: Vec<&str> = text.split_inclusive(' ').collect(); // inclusive keeps separators
-        let mut tokens = words; 
-        if tokens.is_empty() && !text.is_empty() { tokens = vec![text]; }
+        let mut tokens = words;
+        if tokens.is_empty() && !text.is_empty() {
+            tokens = vec![text];
+        }
 
         for token in tokens.iter() {
             let chunks = processor.process(token);
             for chunk in chunks {
                 match chunk {
                     StreamChunk::Text(content) => {
-                         let _ = Emitter::emit(window, &format!("session:{}", session_id), AgentEvent::Token { content });
-                    },
+                        let _ = Emitter::emit(
+                            window,
+                            &format!("session:{}", session_id),
+                            AgentEvent::Token { content },
+                        );
+                    }
                     StreamChunk::Thinking(content) => {
-                         let _ = Emitter::emit(window, &format!("session:{}", session_id), AgentEvent::Thinking { message: content });
+                        let _ = Emitter::emit(
+                            window,
+                            &format!("session:{}", session_id),
+                            AgentEvent::Thinking { message: content },
+                        );
                     }
                 }
             }
@@ -558,7 +745,13 @@ impl<R: Runtime> AgentLoop<R> {
     }
 }
 
-fn save_message(db_pool: &DbPool, role: &str, content: &str, session_id: &str, metadata_json: Option<String>) {
+fn save_message(
+    db_pool: &DbPool,
+    role: &str,
+    content: &str,
+    session_id: &str,
+    metadata_json: Option<String>,
+) {
     use crate::schema::messages;
     if let Ok(mut conn) = db_pool.get() {
         let msg = crate::models::NewMessage {
@@ -569,18 +762,21 @@ fn save_message(db_pool: &DbPool, role: &str, content: &str, session_id: &str, m
             metadata_json,
             tokens: None,
         };
-        let _ = diesel::insert_into(messages::table).values(&msg).execute(&mut conn);
+        let _ = diesel::insert_into(messages::table)
+            .values(&msg)
+            .execute(&mut conn);
     }
 }
 
 // Updated start_chat_task
 // Updated start_chat_task
-pub mod planner;
 pub mod coordinator;
+pub mod planner;
 
 use coordinator::Coordinator;
 
 // Updated start_chat_task
+#[allow(clippy::too_many_arguments)]
 pub fn start_chat_task<R: Runtime>(
     // mut agent_loop: AgentLoop<R>, // No longer need AgentLoop passed in, or we wrap it in Coordinator
     // Actually start_chat_task signature shouldn't change too much if we want to avoid breaking callers.
@@ -590,7 +786,7 @@ pub fn start_chat_task<R: Runtime>(
     // Let's keep signature similar but expect slightly different args if needed.
     // But wait, AgentLoop::new is async. Callers usually do: `let loop = AgentLoop::new(...)`.
     // Let's take the necessary components to build Coordinator.
-    
+
     // Changing signature:
     agent_db: DbAgent, // Need DB agent config to build Coordinator/Planner
     message: String,
@@ -610,12 +806,11 @@ pub fn start_chat_task<R: Runtime>(
         pending_approvals,
         mode,
     );
-    
+
     tauri::async_runtime::spawn(async move {
         coordinator.run(message).await;
     });
 }
-
 
 fn extract_tool_calls(response: &str) -> Vec<Value> {
     let mut calls = Vec::new();
@@ -627,9 +822,9 @@ fn extract_tool_calls(response: &str) -> Vec<Value> {
         }
         // If it's an array of valid tool calls (rare but possible)
         if let Some(arr) = json.as_array() {
-             if arr.iter().all(|v| v.is_object() && v.get("tool").is_some()) {
-                 return arr.clone();
-             }
+            if arr.iter().all(|v| v.is_object() && v.get("tool").is_some()) {
+                return arr.clone();
+            }
         }
     }
 
@@ -647,7 +842,7 @@ fn extract_tool_calls(response: &str) -> Vec<Value> {
 
             while j < len {
                 let c = chars[j];
-                
+
                 if escape {
                     escape = false;
                 } else if c == '\\' {
@@ -666,8 +861,8 @@ fn extract_tool_calls(response: &str) -> Vec<Value> {
                                 if json.is_object() && json.get("tool").is_some() {
                                     calls.push(json);
                                     // Advance i to j to avoid nested parsing or re-parsing
-                                    i = j; 
-                                    break; 
+                                    i = j;
+                                    break;
                                 }
                             }
                             // If not valid JSON or not tool, just break to continue scanning from i+1?
@@ -683,7 +878,7 @@ fn extract_tool_calls(response: &str) -> Vec<Value> {
         }
         i += 1;
     }
-    
+
     calls
 }
 

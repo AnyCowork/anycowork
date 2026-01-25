@@ -107,8 +107,14 @@ impl Agent {
         let characteristics = AgentCharacteristicsDto {
             personality: self.personality,
             tone: self.tone,
-            expertise: self.expertise
-                .map(|e| e.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+            expertise: self
+                .expertise
+                .map(|e| {
+                    e.split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect()
+                })
                 .unwrap_or_default(),
         };
 
@@ -127,11 +133,23 @@ impl Agent {
             characteristics,
             ai_config,
             system_prompt: self.system_prompt,
-            skills: self.skills
-                .map(|s| s.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+            skills: self
+                .skills
+                .map(|s| {
+                    s.split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect()
+                })
                 .unwrap_or_default(),
-            mcp_servers: self.mcp_servers
-                .map(|s| s.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+            mcp_servers: self
+                .mcp_servers
+                .map(|s| {
+                    s.split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect()
+                })
                 .unwrap_or_default(),
             created_at: self.created_at,
             updated_at: self.updated_at,
