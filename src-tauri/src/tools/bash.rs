@@ -54,6 +54,7 @@ impl<R: Runtime> Tool<R> for BashTool {
             metadata: {
                 let mut map = std::collections::HashMap::new();
                 map.insert("command".to_string(), command.to_string());
+                map.insert("resource".to_string(), command.to_string());
                 map.insert("session_id".to_string(), ctx.session_id.clone());
                 map
             },

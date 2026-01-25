@@ -29,6 +29,7 @@ import {
   X,
   Zap,
   ListTodo,
+  Brain,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -116,6 +117,65 @@ interface ExecutionJob {
   error?: string;
   created_at: string;
   completed_at?: string;
+}
+
+interface ThinkingItemProps {
+  content: string;
+  isFinished: boolean;
+}
+
+function ThinkingItem({ content, isFinished }: ThinkingItemProps) {
+  const [isOpen, setIsOpen] = useState(!isFinished);
+
+  // Auto-collapse when finished (with delay)
+  useEffect(() => {
+    if (isFinished) {
+      const timer = setTimeout(() => setIsOpen(false), 800);
+      return () => clearTimeout(timer);
+    } else {
+      setIsOpen(true);
+    }
+  }, [isFinished]);
+
+  return (
+    <div className="rounded-lg border bg-muted/20 overflow-hidden mb-2">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/30 transition-colors text-left"
+      >
+        <Brain className={cn("h-3.5 w-3.5", !isFinished && "animate-pulse text-primary")} />
+        <span className="flex-1">Thinking Process</span>
+        <div className={cn("transition-transform duration-200 text-muted-foreground/50", isOpen ? "rotate-90" : "")}>
+          <ChevronRight className="h-3.5 w-3.5" />
+        </div>
+      </button>
+      {isOpen && (
+        <div className="px-3 pb-2 pt-0 animate-in slide-in-from-top-1 duration-200">
+          <div className="pl-4 border-l-2 border-primary/20 ml-1.5 my-1">
+            <ReactMarkdown
+              className="prose dark:prose-invert max-w-none text-xs text-muted-foreground/80 leading-relaxed"
+              remarkPlugins={[remarkGfm]}
+              components={{
+                pre: ({ node, ...props }) => (
+                  <div className="overflow-x-auto w-full my-1 rounded bg-black/5 dark:bg-black/20 p-1.5">
+                    <pre className="whitespace-pre-wrap break-words text-[10px]" {...props} />
+                  </div>
+                ),
+                code: ({ node, inline, ...props }: any) =>
+                  inline ? (
+                    <code className="bg-black/5 dark:bg-black/20 rounded px-1 py-0.5 text-[10px] break-all" {...props} />
+                  ) : (
+                    <code className="block whitespace-pre-wrap break-words text-[10px]" {...props} />
+                  )
+              }}
+            >
+              {content.replace(/^> 🧠 \*\*Thinking\*\*: /, '')}
+            </ReactMarkdown>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function ChatPage() {
@@ -1472,6 +1532,12 @@ export default function ChatPage() {
                             </div>
                           </details>
                         </div>
+                      ) : message.message_type === "thinking" ? (
+                        <ThinkingItem
+                          content={message.content}
+                          // Use index from map callback if available, otherwise just check last
+                          isFinished={message.id !== messages[messages.length - 1].id || !isLoading}
+                        />
                       ) : (
                         message.content && (
                           !message.a2uiMessages ||

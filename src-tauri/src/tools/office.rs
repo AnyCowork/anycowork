@@ -83,14 +83,21 @@ impl<R: Runtime> Tool<R> for OfficeTool {
 
 
         // Permission check
+        let permission_type = if op == "write_docx" {
+            PermissionType::FilesystemWrite
+        } else {
+            PermissionType::FilesystemRead
+        };
+
         let perm_req = PermissionRequest {
              id: uuid::Uuid::new_v4().to_string(),
-             permission_type: PermissionType::FilesystemRead,
-             message: format!("Agent wants to read office file at {}", path_str),
+             permission_type,
+             message: format!("Agent wants to {} office file at {}", op.replace("_", " "), path_str),
              metadata: {
                  let mut map = HashMap::new();
                  map.insert("operation".to_string(), op.to_string());
                  map.insert("path".to_string(), path_str.to_string());
+                 map.insert("resource".to_string(), path_str.to_string());
                  map
              },
         };

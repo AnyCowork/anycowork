@@ -213,192 +213,177 @@ impl<R: Runtime> AgentLoop<R> {
             };
 
             // Post-process response to show thinking if it contains text before tool
-            // (We do this after we get the full response)
-            let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
-                message: format!("Raw LLM Response: {}", response),
-            });
+            if let Some(json_start) = response.find('{') {
+                if response[json_start..].contains("\"tool\"") {
+                    let thinking_text = response[..json_start].trim();
+                     if !thinking_text.is_empty() {
+                        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
+                            message: thinking_text.to_string(),
+                        });
+                    }
+                }
+            }
+
+            // Attempt to parse tool calls
+            let tool_calls = extract_tool_calls(&response);
             
-            // Attempt to parse tool call
-            // Debug: Emit raw response to help diagnose tool usage issues
-            let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
-                message: format!("Raw LLM Response: {}", response),
-            });
+            // Filter to find valid tool calls first to decide if we should enter tool execution mode
+            let valid_calls: Vec<(String, Value, &Box<dyn Tool<R>>)> = tool_calls.into_iter()
+                .filter_map(|tc| {
+                    let tool_name = tc.get("tool")?.as_str()?.to_string();
+                    let args = tc.get("args")?.clone();
+                    let tool = self.tools.iter().find(|t| t.name() == tool_name)?;
+                    Some((tool_name, args, tool))
+                })
+                .collect();
 
-            // Attempt to parse tool call
-            let tool_call_json = extract_tool_call(&response);
+            if !valid_calls.is_empty() {
+                // Persist the Assistant's Response (with all tool calls) ONCE
+                let truncated_response = truncate_message_content(&response, "assistant");
+                save_message(&db_pool, "assistant", &response, &self.session_id, None);
+                self.history.push(create_assistant_message(truncated_response));
 
-            // Check if it's a tool call
-            if let Some(tool_call) = tool_call_json {
-                if let (Some(tool_name), Some(args)) = (tool_call["tool"].as_str(), tool_call.get("args")) {
-                    // It is a tool call
-                    if let Some(tool) = self.tools.iter().find(|t| t.name() == tool_name) {
-                        // Persist the Assistant's Tool Call
-                        let truncated_response = truncate_message_content(&response, "assistant");
-                        // For assistant tool calls, we could store metadata, but usually the text is enough or we parse it.
-                        // However, to be consistent, let's just pass None or the args if we wanted.
-                        // For now, let's keep it simple for the assistant side as the UI parses the text fine for "Thinking".
-                        save_message(&db_pool, "assistant", &response, &self.session_id, None);
-                        self.history.push(create_assistant_message(truncated_response));
+                for (tool_name, args, tool) in valid_calls {
+                    // VALIDATION START
+                    let schema_json = tool.parameters_schema();
+                    let compiled_schema = JSONSchema::compile(&schema_json).unwrap_or_else(|e| panic!("Invalid schema for tool {}: {}", tool_name, e));
+                    
+                    if let Err(errors) = compiled_schema.validate(&args) {
+                        let error_msg = errors.map(|e| e.to_string()).collect::<Vec<String>>().join(", ");
+                        let fail_msg = format!("Tool argument validation failed (schema): {}", error_msg);
 
-                        // VALIDATION START
-                        let schema_json = tool.parameters_schema();
-                        let compiled_schema = JSONSchema::compile(&schema_json).unwrap_or_else(|e| panic!("Invalid schema for tool {}: {}", tool_name, e));
-                        
-                        if let Err(errors) = compiled_schema.validate(args) {
-                            let error_msg = errors.map(|e| e.to_string()).collect::<Vec<String>>().join(", ");
-                            let fail_msg = format!("Tool argument validation failed (schema): {}", error_msg);
-
-                            let step_id = Uuid::new_v4().to_string();
-                            let step = ExecutionStep {
-                                id: step_id.clone(),
-                                tool_name: tool_name.to_string(),
-                                tool_args: args.clone(),
-                                status: "failed".to_string(),
-                                result: Some(fail_msg.clone()),
-                                requires_approval: false,
-                                created_at: chrono::Utc::now().to_rfc3339(),
-                            };
-
-                             let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepStarted {
-                                job: job.clone(),
-                                step: step.clone(),
-                            });
-                             let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepCompleted {
-                                job: job.clone(),
-                                step: step.clone(),
-                            });
-
-                             // Add failure to history and DB
-                            let fail_msg_full = format!("Tool '{}' validation failed: {}", tool_name, fail_msg);
-                            let truncated_fail_msg = truncate_message_content(&fail_msg_full, "user");
-                            save_message(&db_pool, "tool", &fail_msg_full, &self.session_id, Some(args.to_string()));
-                            self.history.push(create_user_message(truncated_fail_msg));
-
-                            continue;
-                        }
-                        
-                        // 2. Logic Validation
-                        if let Err(e) = tool.validate_args(args).await {
-                             let fail_msg = format!("Tool argument validation failed (logic): {}", e);
-                             let step_id = Uuid::new_v4().to_string();
-                             let step = ExecutionStep {
-                                id: step_id.clone(),
-                                tool_name: tool_name.to_string(),
-                                tool_args: args.clone(),
-                                status: "failed".to_string(),
-                                result: Some(fail_msg.clone()),
-                                requires_approval: false,
-                                created_at: chrono::Utc::now().to_rfc3339(),
-                            };
-                             let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepStarted { job: job.clone(), step: step.clone() });
-                             
-                             // Add failure to history and DB
-                             let fail_msg_full = format!("Tool '{}' validation failed: {}", tool_name, fail_msg);
-                             let truncated_fail_msg = truncate_message_content(&fail_msg_full, "user");
-                             save_message(&db_pool, "tool", &fail_msg_full, &self.session_id, Some(args.to_string()));
-                             self.history.push(create_user_message(truncated_fail_msg));
-                             continue;
-                        }
-
-                        // VALIDATION END
-                        
                         let step_id = Uuid::new_v4().to_string();
                         let step = ExecutionStep {
                             id: step_id.clone(),
                             tool_name: tool_name.to_string(),
                             tool_args: args.clone(),
-                            status: "executing".to_string(),
-                            result: None,
-                            requires_approval: false, // Handled internally by tool now
+                            status: "failed".to_string(),
+                            result: Some(fail_msg.clone()),
+                            requires_approval: false,
                             created_at: chrono::Utc::now().to_rfc3339(),
                         };
 
-                        // 2. Execution
-                        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepStarted {
+                            let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepStarted {
+                            job: job.clone(),
+                            step: step.clone(),
+                        });
+                            let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepCompleted {
                             job: job.clone(),
                             step: step.clone(),
                         });
 
-                        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
-                            message: format!("Executing {}...", tool_name),
-                        });
-                        
-                        let ctx = ToolContext {
-                            permissions: permission_manager.clone(),
-                            window: Some(window.clone()), 
-                            session_id: self.session_id.clone(),
-                        };
+                            // Add failure to history and DB
+                        let fail_msg_full = format!("Tool '{}' validation failed: {}", tool_name, fail_msg);
+                        let truncated_fail_msg = truncate_message_content(&fail_msg_full, "user");
+                        save_message(&db_pool, "tool", &fail_msg_full, &self.session_id, Some(args.to_string()));
+                        self.history.push(create_user_message(truncated_fail_msg));
 
-                        // SNAPSHOT START
-                        let pre_snapshot = self.snapshot_manager.create_snapshot().ok();
-                    
-                         let execution_result = tool.execute(args.clone(), &ctx).await.unwrap_or_else(|e| Value::String(format!("Error: {}", e)));
-                        
-                        // SNAPSHOT END & DIFF
-                        if let Some(pre) = pre_snapshot {
-                            if let Ok(post) = self.snapshot_manager.create_snapshot() {
-                                let diff = self.snapshot_manager.diff(&pre, &post);
-                                if !diff.new_files.is_empty() || !diff.modified_files.is_empty() || !diff.deleted_files.is_empty() {
-                                     let diff_msg = format!("Workspace Changes: +{:?} *{:?} -{:?}", diff.new_files, diff.modified_files, diff.deleted_files);
-                                     let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
-                                        message: diff_msg,
-                                    });
-                                }
-                            }
-                        }
-
-                        // 3. Verification
-                        let success = tool.verify_result(&execution_result);
-                        let status = if success { "completed" } else { "failed" };
-                        
-                        // 4. Summarization
-                        let mut final_result = execution_result.to_string();
-
-                        // Smart truncation (Safety to prevent token overflow)
-                        final_result = truncate_tool_result(tool_name, &final_result);
-
-                        if success && tool.needs_summarization(&args, &execution_result) {
-                            // Summarization disabled temporarily due to generic client limitation
-                            /*
-                            let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
-                                message: format!("Summarizing output from {}...", tool_name),
-                            });
-                            
-                            // Simple summarization using the same client/model
-                            let summary_agent = client.agent(&self.model)
-                                .preamble("You are a helpful assistant. Summarize the following tool output concisely.")
-                                .build();
-                            
-                            if let Ok(summary) = summary_agent.prompt(&final_result).await {
-                                final_result = format!("(Summary) {}", summary);
-                            }
-                            */
-                        }
-
-                        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepCompleted {
-                            job: job.clone(),
-                            step: ExecutionStep {
-                                status: status.to_string(),
-                                result: Some(final_result.clone()),
-                                ..step
-                            },
-                        });
-
-                        // Add result to history and DB
-                        let tool_result_msg = format!("Tool '{}' result: {}", tool_name, final_result);
-                        let truncated_tool_result = truncate_message_content(&tool_result_msg, "user");
-                        
-                        // IMPORTANT: Save as 'tool' role with args as metadata
-                        save_message(&db_pool, "tool", &tool_result_msg, &self.session_id, Some(args.to_string()));
-                        
-                        self.history.push(create_user_message(truncated_tool_result));
-
-                        // Optimize history to prevent context overflow
-                        optimize_history_by_tokens(&mut self.history, MAX_HISTORY_TOKENS);
-
-                        continue; // Loop again
+                        continue;
                     }
+                    
+                    // 2. Logic Validation
+                    if let Err(e) = tool.validate_args(&args).await {
+                            let fail_msg = format!("Tool argument validation failed (logic): {}", e);
+                            let step_id = Uuid::new_v4().to_string();
+                            let step = ExecutionStep {
+                            id: step_id.clone(),
+                            tool_name: tool_name.to_string(),
+                            tool_args: args.clone(),
+                            status: "failed".to_string(),
+                            result: Some(fail_msg.clone()),
+                            requires_approval: false,
+                            created_at: chrono::Utc::now().to_rfc3339(),
+                        };
+                            let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepStarted { job: job.clone(), step: step.clone() });
+                            
+                            // Add failure to history and DB
+                            let fail_msg_full = format!("Tool '{}' validation failed: {}", tool_name, fail_msg);
+                            let truncated_fail_msg = truncate_message_content(&fail_msg_full, "user");
+                            save_message(&db_pool, "tool", &fail_msg_full, &self.session_id, Some(args.to_string()));
+                            self.history.push(create_user_message(truncated_fail_msg));
+                            continue;
+                    }
+
+                    // VALIDATION END
+                    
+                    let step_id = Uuid::new_v4().to_string();
+                    let step = ExecutionStep {
+                        id: step_id.clone(),
+                        tool_name: tool_name.to_string(),
+                        tool_args: args.clone(),
+                        status: "executing".to_string(),
+                        result: None,
+                        requires_approval: false, // Handled internally by tool now
+                        created_at: chrono::Utc::now().to_rfc3339(),
+                    };
+
+                    // 2. Execution
+                    let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepStarted {
+                        job: job.clone(),
+                        step: step.clone(),
+                    });
+
+                    let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
+                        message: format!("Executing {}...", tool_name),
+                    });
+                    
+                    let ctx = ToolContext {
+                        permissions: permission_manager.clone(),
+                        window: Some(window.clone()), 
+                        session_id: self.session_id.clone(),
+                    };
+
+                    // SNAPSHOT START
+                    let pre_snapshot = self.snapshot_manager.create_snapshot().ok();
+                
+                        let execution_result = tool.execute(args.clone(), &ctx).await.unwrap_or_else(|e| Value::String(format!("Error: {}", e)));
+                    
+                    // SNAPSHOT END & DIFF
+                    if let Some(pre) = pre_snapshot {
+                        if let Ok(post) = self.snapshot_manager.create_snapshot() {
+                            let diff = self.snapshot_manager.diff(&pre, &post);
+                            if !diff.new_files.is_empty() || !diff.modified_files.is_empty() || !diff.deleted_files.is_empty() {
+                                    let diff_msg = format!("Workspace Changes: +{:?} *{:?} -{:?}", diff.new_files, diff.modified_files, diff.deleted_files);
+                                    let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
+                                    message: diff_msg,
+                                });
+                            }
+                        }
+                    }
+
+                    // 3. Verification
+                    let success = tool.verify_result(&execution_result);
+                    let status = if success { "completed" } else { "failed" };
+                    
+                    // 4. Summarization
+                    let mut final_result = execution_result.to_string();
+
+                    // Smart truncation (Safety to prevent token overflow)
+                    final_result = truncate_tool_result(&tool_name, &final_result);
+
+                    let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::StepCompleted {
+                        job: job.clone(),
+                        step: ExecutionStep {
+                            status: status.to_string(),
+                            result: Some(final_result.clone()),
+                            ..step
+                        },
+                    });
+
+                    // Add result to history and DB
+                    let tool_result_msg = format!("Tool '{}' result: {}", tool_name, final_result);
+                    let truncated_tool_result = truncate_message_content(&tool_result_msg, "user");
+                    
+                    // IMPORTANT: Save as 'tool' role with args as metadata
+                    save_message(&db_pool, "tool", &tool_result_msg, &self.session_id, Some(args.to_string()));
+                    
+                    self.history.push(create_user_message(truncated_tool_result));
                 }
+
+                // Optimize history to prevent context overflow
+                optimize_history_by_tokens(&mut self.history, MAX_HISTORY_TOKENS);
+
+                continue; // Loop again
             }
             
             // Not a tool call implies text response
@@ -547,16 +532,23 @@ pub fn start_chat_task<R: Runtime>(
 }
 
 
-fn extract_tool_call(response: &str) -> Option<Value> {
+fn extract_tool_calls(response: &str) -> Vec<Value> {
+    let mut calls = Vec::new();
+
     // 1. Try pure JSON first
     if let Ok(json) = serde_json::from_str::<Value>(response) {
         if json.is_object() && json.get("tool").is_some() {
-            return Some(json);
+            return vec![json];
+        }
+        // If it's an array of valid tool calls (rare but possible)
+        if let Some(arr) = json.as_array() {
+             if arr.iter().all(|v| v.is_object() && v.get("tool").is_some()) {
+                 return arr.clone();
+             }
         }
     }
 
     // 2. Scan for JSON objects logic
-    // We look for the first '{' and try to find a matching '}' that forms valid JSON with a "tool" field.
     let chars: Vec<char> = response.chars().collect();
     let len = chars.len();
     let mut i = 0;
@@ -588,9 +580,16 @@ fn extract_tool_call(response: &str) -> Option<Value> {
                                 let candidate: String = chars[i..=j].iter().collect();
                                 if let Ok(json) = serde_json::from_str::<Value>(&candidate) {
                                     if json.is_object() && json.get("tool").is_some() {
-                                        return Some(json);
+                                        calls.push(json);
+                                        // Advance i to j to avoid nested parsing or re-parsing
+                                        i = j; 
+                                        break; 
                                     }
                                 }
+                                // If not valid JSON or not tool, just break to continue scanning from i+1?
+                                // No, if it was balanced but invalid, we treat it as text.
+                                // Actually, if we found a balanced block but it wasn't a tool, we should probably preserve i position?
+                                // But `break` here breaks the inner loop.
                                 break;
                             }
                         }
@@ -602,7 +601,7 @@ fn extract_tool_call(response: &str) -> Option<Value> {
         i += 1;
     }
     
-    None
+    calls
 }
 
 #[cfg(test)]
@@ -613,17 +612,17 @@ mod parser_tests {
     #[test]
     fn test_extract_pure_json() {
         let input = r#"{"tool": "test", "args": {}}"#;
-        let result = extract_tool_call(input);
-        assert!(result.is_some());
-        assert_eq!(result.unwrap()["tool"], "test");
+        let result = extract_tool_calls(input);
+        assert!(!result.is_empty());
+        assert_eq!(result[0]["tool"], "test");
     }
 
     #[test]
     fn test_extract_embedded_json() {
         let input = r#"I will run this tool: {"tool": "test", "args": {}}"#;
-        let result = extract_tool_call(input);
-        assert!(result.is_some());
-        assert_eq!(result.unwrap()["tool"], "test");
+        let result = extract_tool_calls(input);
+        assert!(!result.is_empty());
+        assert_eq!(result[0]["tool"], "test");
     }
 
     #[test]
@@ -636,23 +635,32 @@ mod parser_tests {
 }
 ```
 "#;
-        let result = extract_tool_call(input);
-        assert!(result.is_some());
-        assert_eq!(result.unwrap()["tool"], "test");
+        let result = extract_tool_calls(input);
+        assert!(!result.is_empty());
+        assert_eq!(result[0]["tool"], "test");
     }
 
     #[test]
     fn test_extract_suffix_text() {
         let input = r#"{"tool": "test", "args": {}} is the tool I used."#;
-        let result = extract_tool_call(input);
-        assert!(result.is_some());
-        assert_eq!(result.unwrap()["tool"], "test");
+        let result = extract_tool_calls(input);
+        assert!(!result.is_empty());
+        assert_eq!(result[0]["tool"], "test");
     }
 
     #[test]
     fn test_extract_invalid_json() {
         let input = r#"This is just text with { brackets } but no valid json."#;
-        let result = extract_tool_call(input);
-        assert!(result.is_none());
+        let result = extract_tool_calls(input);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_extract_multiple_tools() {
+        let input = r#"First tool: {"tool": "t1", "args": {}}, Second: {"tool": "t2", "args": {}}"#;
+        let result = extract_tool_calls(input);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0]["tool"], "t1");
+        assert_eq!(result[1]["tool"], "t2");
     }
 }

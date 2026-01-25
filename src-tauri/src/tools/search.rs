@@ -66,6 +66,26 @@ impl<R: Runtime> Tool<R> for SearchTool {
         let root = std::env::current_dir().unwrap_or(PathBuf::from("."));
         let target_path = root.join(path_str);
 
+        // Permission check
+        let perm_req = crate::permissions::PermissionRequest {
+             id: uuid::Uuid::new_v4().to_string(),
+             permission_type: crate::permissions::PermissionType::FilesystemRead,
+             message: format!("Agent wants to search files in {}", path_str),
+             metadata: {
+                 let mut map = std::collections::HashMap::new();
+                 map.insert("operation".to_string(), "search".to_string());
+                 map.insert("path".to_string(), path_str.to_string());
+                 map.insert("resource".to_string(), path_str.to_string());
+                 map
+             },
+        };
+
+        // Note: We need to handle potential absence of window in ToolContext slightly better or rely on default deny?
+        // Method signature of request_permission handles Option<Window>.
+        if !_ctx.permissions.request_permission(_ctx.window.as_ref(), perm_req).await? {
+             return Err("Permission denied".to_string());
+        }
+
         // Run grep -r "query" target_path
         let output = Command::new("grep")
             .arg("-r")

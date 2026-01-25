@@ -99,4 +99,28 @@ describe('Daily Usage Scenarios E2E', () => {
 
     }, SCENARIO_TIMEOUT);
 
+    // Scenario 4: Multi-Tool Execution
+    test('Scenario: Multi-Tool Execution (Fast Mode)', async () => {
+        await startNewChat(driver);
+        await setMode('Fast');
+
+        const timestamp = Date.now();
+        const files = [`multi_a_${timestamp}.txt`, `multi_b_${timestamp}.txt`];
+
+        // Explicitly ask for multiple actions
+        await sendMessageAndWait(driver, `Create two files named ${files[0]} and ${files[1]}. Do it in a single response if possible.`);
+
+        // Verify result contains confirmation for BOTH
+        // Let's verify by reading them back
+        await sendMessageAndWait(driver, `List files matching "multi_*_${timestamp}.txt"`);
+        const messages = await driver.findElements(By.css('[data-testid="assistant-message"]'));
+        const listMsg = messages[messages.length - 1];
+        const listText = await listMsg.getText();
+
+        if (!listText.includes(files[0]) || !listText.includes(files[1])) {
+            throw new Error(`Expected both files to be listed. Got: ${listText}`);
+        }
+
+    }, SCENARIO_TIMEOUT);
+
 });
