@@ -9,67 +9,67 @@ body,
 }
 @layer base {
   :root {
-    /* Warm Earthy Theme - Light Mode */
-    --background: 60 23.1% 97.5%;     /* Ivory Light #FAFAF7 */
-    --foreground: 0 0% 9.8%;          /* Slate Dark #191919 */
+    /* Professional Blue-Gray Theme - Light Mode */
+    --background: 0 0% 98%;           /* Soft Gray #FAFAFA */
+    --foreground: 215 25% 15%;        /* Dark Blue-Gray #1E293B */
 
-    --card: 0 0% 100%;               /* White */
-    --card-foreground: 0 0% 9.8%;
+    --card: 0 0% 100%;                /* White */
+    --card-foreground: 215 25% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 9.8%;
+    --popover-foreground: 215 25% 15%;
 
-    --primary: 15 52.3% 58%;         /* Book Cloth #CC785C */
+    --primary: 217 91% 60%;           /* Strong Blue #3B82F6 */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 50 10.3% 88.6%;     /* Ivory Dark #E5E4DF */
-    --secondary-foreground: 0 0% 9.8%;
+    --secondary: 220 13% 91%;         /* Cool Gray #E8EAED */
+    --secondary-foreground: 215 25% 15%;
 
-    --muted: 50 10.3% 88.6%;         /* Ivory Dark */
-    --muted-foreground: 60 1.5% 39.4%; /* Cloud Dark */
+    --muted: 220 13% 95%;             /* Very Light Gray #F3F4F6 */
+    --muted-foreground: 215 15% 50%;  /* Medium Gray-Blue #64748B */
 
-    --accent: 60 14.3% 93.1%;        /* Ivory Medium #F0F0EB */
-    --accent-foreground: 15 52.3% 58%;
+    --accent: 220 13% 95%;            /* Very Light Gray */
+    --accent-foreground: 217 91% 60%;
 
-    --destructive: 4.8 49.2% 50.6%;  /* Error Red #BF4D43 */
+    --destructive: 0 84% 60%;         /* Error Red #EF4444 */
     --destructive-foreground: 0 0% 98%;
 
-    --border: 50 10.3% 88.6%;        /* Ivory Dark */
-    --input: 50 10.3% 88.6%;
-    --ring: 15 52.3% 58%;
+    --border: 220 13% 91%;            /* Cool Gray Border */
+    --input: 220 13% 91%;
+    --ring: 217 91% 60%;
 
     --radius: 0.75rem;
   }
 
   .dark {
-    /* Warm Earthy Theme - Dark Mode */
-    --background: 0 0% 9.8%;         /* Slate Dark #191919 */
-    --foreground: 60 23.1% 97.5%;    /* Ivory Light */
+    /* Professional Blue-Gray Theme - Dark Mode */
+    --background: 222 20% 11%;        /* Dark Gray-Blue #1A1F2E */
+    --foreground: 210 20% 98%;        /* Very Light Gray #F9FAFB */
 
-    --card: 60 1.3% 14.7%;           /* Slate Medium #262625 */
-    --card-foreground: 60 23.1% 97.5%;
+    --card: 220 15% 16%;              /* Dark Gray-Card #25292E */
+    --card-foreground: 210 20% 98%;
 
-    --popover: 60 1.3% 14.7%;
-    --popover-foreground: 60 23.1% 97.5%;
+    --popover: 220 15% 16%;
+    --popover-foreground: 210 20% 98%;
 
-    --primary: 15 52.3% 58%;         /* Book Cloth */
+    --primary: 217 91% 60%;           /* Strong Blue #3B82F6 */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 60 1.6% 24.7%;      /* Slate Light #40403E */
-    --secondary-foreground: 60 23.1% 97.5%;
+    --secondary: 220 10% 20%;         /* Darker Gray #31353A */
+    --secondary-foreground: 210 20% 98%;
 
-    --muted: 60 1.6% 24.7%;          /* Slate Light */
-    --muted-foreground: 60 1.8% 56.1%; /* Cloud Medium */
+    --muted: 220 10% 20%;             /* Darker Gray */
+    --muted-foreground: 215 15% 65%;  /* Medium Gray #94A3B8 */
 
-    --accent: 60 1.6% 24.7%;         /* Slate Light */
-    --accent-foreground: 15 52.3% 58%;
+    --accent: 220 10% 20%;            /* Darker Gray */
+    --accent-foreground: 217 91% 60%;
 
-    --destructive: 4.8 49.2% 50.6%;
+    --destructive: 0 84% 60%;         /* Error Red #EF4444 */
     --destructive-foreground: 0 0% 98%;
 
-    --border: 60 1.6% 24.7%;         /* Slate Light */
-    --input: 60 1.6% 24.7%;
-    --ring: 15 52.3% 58%;
+    --border: 220 10% 20%;            /* Darker Gray Border */
+    --input: 220 10% 20%;
+    --ring: 217 91% 60%;
   }
 }
 

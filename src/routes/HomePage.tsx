@@ -166,8 +166,8 @@ function HomePage() {
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50">
-                  <Sparkles className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
+                  <Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
                   <CardTitle className="text-base">AI Provider</CardTitle>

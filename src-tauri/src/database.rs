@@ -61,7 +61,7 @@ pub fn ensure_default_agent(pool: &DbPool) {
             personality: None,
             tone: None,
             expertise: None,
-            ai_provider: "openai".to_string(),
+            ai_provider: "gemini".to_string(),
             ai_model: "gemini-3-pro-preview".to_string(),
             ai_temperature: 0.7,
             ai_config: r#"{"provider": "gemini", "model": "gemini-3-pro-preview"}"#.to_string(),

@@ -38,80 +38,121 @@ impl PlanningAgent {
             scratchpad => Value::Null
         }).map_err(|e| e.to_string())?;
 
-        // Stream handling
-        // We will collect the full text to parse later
-        let mut full_response = String::new();
+        let mut attempts = 0;
+        let max_attempts = 3;
 
-        match self.provider.as_str() {
-            "openai" => {
-                let client = openai::Client::from_env();
-                let agent = client.agent(&self.model).preamble(&preamble).build();
-                let mut stream = agent.stream_prompt(objective).await;
-                
-                while let Some(chunk) = stream.next().await {
+        loop {
+            attempts += 1;
+            
+            // Stream handling
+            // We will collect the full text to parse later
+            let mut full_response = String::new();
+
+            let result = match self.provider.as_str() {
+                "openai" => {
+                    let client = openai::Client::from_env();
+                    let agent = client.agent(&self.model).preamble(&preamble).build();
+                    let mut stream = agent.stream_prompt(objective).await;
+                    
+                    let mut res = Ok(());
+                    
+                    while let Some(chunk) = stream.next().await {
+                        match chunk {
+                            Ok(token) => {
+                                if let MultiTurnStreamItem::StreamAssistantItem(StreamedAssistantContent::Text(t)) = token {
+                                    on_token(t.text.clone());
+                                    full_response.push_str(&t.text);
+                                }
+                            },
+                            Err(e) => {
+                                error!("Error in planning stream: {}", e);
+                                res = Err(e.to_string());
+                                break;
+                            }
+                        }
+                    }
+                    res
+                },
+                "gemini" => {
+                    let client = gemini::Client::from_env();
+                    let agent = client.agent(&self.model).preamble(&preamble).build();
+                    let mut stream = agent.stream_prompt(objective).await;
+                    let mut result = Ok(());
+
+                    while let Some(chunk) = stream.next().await {
                     match chunk {
-                        Ok(token) => {
-                            if let MultiTurnStreamItem::StreamAssistantItem(StreamedAssistantContent::Text(t)) = token {
-                                on_token(t.text.clone());
-                                full_response.push_str(&t.text);
+                            Ok(token) => {
+                                if let MultiTurnStreamItem::StreamAssistantItem(StreamedAssistantContent::Text(t)) = token {
+                                    on_token(t.text.clone());
+                                    full_response.push_str(&t.text);
+                                }
+                            },
+                            Err(e) => {
+                                error!("Error in planning stream: {}", e);
+                                result = Err(e.to_string());
+                                break;
                             }
-                        },
-                        Err(e) => error!("Error in planning stream: {}", e),
+                        }
+                    }
+                    result
+                },
+                "anthropic" => {
+                    let client = anthropic::Client::from_env();
+                    let agent = client.agent(&self.model).preamble(&preamble).build();
+                    let mut stream = agent.stream_prompt(objective).await;
+                    let mut result = Ok(());
+
+                    while let Some(chunk) = stream.next().await {
+                    match chunk {
+                            Ok(token) => {
+                                if let MultiTurnStreamItem::StreamAssistantItem(StreamedAssistantContent::Text(t)) = token {
+                                    on_token(t.text.clone());
+                                    full_response.push_str(&t.text);
+                                }
+                            },
+                            Err(e) => {
+                                error!("Error in planning stream: {}", e);
+                                result = Err(e.to_string());
+                                break;
+                            }
+                        }
+                    }
+                    result
+                },
+                _ => return Err(format!("Unsupported provider for planning: {}", self.provider)),
+            };
+
+            // If we got a stream error or empty response, we retry
+            if result.is_ok() && !full_response.is_empty() {
+                // Clean up response if it contains markdown code blocks or preamble
+                let clean_json = clean_json_text(&full_response);
+
+                match serde_json::from_str::<Plan>(&clean_json) {
+                    Ok(plan) => return Ok(plan),
+                    Err(e) => {
+                        error!("Failed to parse Plan JSON: {}. Attempt {}/{}", e, attempts, max_attempts);
+                        if attempts >= max_attempts {
+                            let snippet = if full_response.len() > 200 { 
+                                format!("{}...", &full_response[..200]) 
+                            } else { 
+                                full_response.clone() 
+                            };
+                            return Err(format!("Failed to parse generated plan: {}. Response start: '{}'", e, snippet));
+                        }
                     }
                 }
-            },
-            "gemini" => {
-                let client = gemini::Client::from_env();
-                let agent = client.agent(&self.model).preamble(&preamble).build();
-                let mut stream = agent.stream_prompt(objective).await;
-
-                while let Some(chunk) = stream.next().await {
-                   match chunk {
-                        Ok(token) => {
-                            if let MultiTurnStreamItem::StreamAssistantItem(StreamedAssistantContent::Text(t)) = token {
-                                on_token(t.text.clone());
-                                full_response.push_str(&t.text);
-                            }
-                        },
-                        Err(e) => error!("Error in planning stream: {}", e),
-                    }
+            } else {
+                let err_msg = result.err().unwrap_or_else(|| "Empty response".to_string());
+                error!("Planning attempt {} failed: {}", attempts, err_msg);
+                if attempts >= max_attempts {
+                    return Err(format!("Planning failed after {} attempts: {}", max_attempts, err_msg));
                 }
-            },
-             "anthropic" => {
-                 // This one was already taking 4 args? 
-                 let client = anthropic::Client::from_env();
-                let agent = client.agent(&self.model).preamble(&preamble).build();
-                let mut stream = agent.stream_prompt(objective).await;
-                
-                while let Some(chunk) = stream.next().await {
-                   match chunk {
-                        Ok(token) => {
-                            if let MultiTurnStreamItem::StreamAssistantItem(StreamedAssistantContent::Text(t)) = token {
-                                on_token(t.text.clone());
-                                full_response.push_str(&t.text);
-                            }
-                        },
-                        Err(e) => error!("Error in planning stream: {}", e),
-                    }
-                }
-            },
-            _ => return Err(format!("Unsupported provider for planning: {}", self.provider)),
-        };
-
-        // Clean up response if it contains markdown code blocks or preamble
-        let clean_json = clean_json_text(&full_response);
-
-        match serde_json::from_str::<Plan>(&clean_json) {
-            Ok(plan) => Ok(plan),
-            Err(e) => {
-                let snippet = if full_response.len() > 200 { 
-                    format!("{}...", &full_response[..200]) 
-                } else { 
-                    full_response.clone() 
-                };
-                error!("Failed to parse Plan JSON: {}. Full Response: {}", e, full_response);
-                Err(format!("Failed to parse generated plan: {}. Response start: '{}'", e, snippet))
             }
+
+            // Exponential backoff
+            let wait_ms = 1000 * (2u64.pow(attempts as u32 - 1));
+            on_token(format!("\n⚠️ Attempt {} failed. Retrying in {}s...\n", attempts, wait_ms as f64 / 1000.0));
+            tokio::time::sleep(tokio::time::Duration::from_millis(wait_ms)).await;
         }
     }
 }

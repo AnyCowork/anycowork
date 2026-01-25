@@ -3,56 +3,56 @@
 @import './landing.css';
 
 :root {
-  /* Warm Earthy Theme - Light Mode */
-  --bg-primary: #FAFAF7;    /* Ivory Light */
-  --bg-secondary: #E5E4DF;  /* Ivory Dark */
-  --bg-tertiary: #F0F0EB;   /* Ivory Medium */
-  --bg-sidebar: #FAFAF7;
-  --bg-chat: #FAFAF7;
+  /* Gray-Blue Theme - Light Mode */
+  --bg-primary: #FAFAFA;    /* Soft Gray */
+  --bg-secondary: #E8EAED;  /* Cool Gray */
+  --bg-tertiary: #F3F4F6;   /* Very Light Gray */
+  --bg-sidebar: #FAFAFA;
+  --bg-chat: #FAFAFA;
 
   /* Text Colors */
-  --text-primary: #191919;  /* Slate Dark */
-  --text-secondary: #64645F; /* Cloud Dark approx */
-  --text-tertiary: #A1A1AA;
-  --text-placeholder: #D4D4D8;
+  --text-primary: #1E293B;  /* Dark Blue-Gray */
+  --text-secondary: #64748B; /* Medium Gray-Blue */
+  --text-tertiary: #94A3B8;
+  --text-placeholder: #CBD5E1;
 
-  /* Accent - Book Cloth */
-  --accent-primary: #CC785C;
-  --accent-hover: #A05E48;
-  --accent-light: #E8B4A1;
-  --accent-subtle: #F0F0EB;
+  /* Accent - Strong Blue */
+  --accent-primary: #3B82F6;
+  --accent-hover: #2563EB;
+  --accent-light: #60A5FA;
+  --accent-subtle: #DBEAFE;
 
   /* Status Colors */
   --success: #10B981;
   --success-bg: #D1FAE5;
   --warning: #F59E0B;
-  --error: #BF4D43; /* Error Red from app */
+  --error: #EF4444;
   --info: #3B82F6;
 
   /* Borders */
-  --border-subtle: #E5E4DF;
-  --border-default: #D6D6D0;
-  --border-strong: #A1A19A;
+  --border-subtle: #E8EAED;
+  --border-default: #CBD5E1;
+  --border-strong: #94A3B8;
 }
 
 /* Dark mode colors */
 .dark {
-  --bg-primary: #191919;    /* Slate Dark */
-  --bg-secondary: #262625;  /* Slate Medium */
-  --bg-tertiary: #40403E;   /* Slate Light */
-  --bg-chat: #191919;
+  --bg-primary: #1A1F2E;    /* Dark Gray-Blue */
+  --bg-secondary: #25292E;  /* Dark Gray-Card */
+  --bg-tertiary: #31353A;   /* Darker Gray */
+  --bg-chat: #1A1F2E;
 
-  --text-primary: #FAFAF7;
-  --text-secondary: #A1A1AA;
-  --text-tertiary: #52525B;
+  --text-primary: #F9FAFB;
+  --text-secondary: #94A3B8;
+  --text-tertiary: #64748B;
 
-  --accent-primary: #CC785C;
-  --accent-hover: #E8B4A1;
-  --accent-subtle: #262625;
+  --accent-primary: #3B82F6;
+  --accent-hover: #60A5FA;
+  --accent-subtle: #1E3A5F;
 
-  --border-subtle: #262625;
-  --border-default: #40403E;
-  --border-strong: #52525B;
+  --border-subtle: #25292E;
+  --border-default: #31353A;
+  --border-strong: #475569;
 }
 
 /* Global Styles */

@@ -1,11 +1,11 @@
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 /// Toggle devtools for the main window
 #[tauri::command]
-pub async fn toggle_devtools(app: AppHandle) -> Result<(), String> {
+pub async fn toggle_devtools(_app: AppHandle) -> Result<(), String> {
     #[cfg(debug_assertions)]
     {
-        if let Some(window) = app.webview_windows().values().next() {
+        if let Some(window) = _app.webview_windows().values().next() {
             if window.is_devtools_open() {
                 window.close_devtools();
             } else {

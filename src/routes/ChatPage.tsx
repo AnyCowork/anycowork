@@ -17,6 +17,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
   Send,
   Bot,
   User,
@@ -152,25 +158,9 @@ function ThinkingItem({ content, isFinished }: ThinkingItemProps) {
       {isOpen && (
         <div className="px-3 pb-2 pt-0 animate-in slide-in-from-top-1 duration-200">
           <div className="pl-4 border-l-2 border-primary/20 ml-1.5 my-1">
-            <ReactMarkdown
-              className="prose dark:prose-invert max-w-none text-xs text-muted-foreground/80 leading-relaxed"
-              remarkPlugins={[remarkGfm]}
-              components={{
-                pre: ({ node, ...props }) => (
-                  <div className="overflow-x-auto w-full my-1 rounded bg-black/5 dark:bg-black/20 p-1.5">
-                    <pre className="whitespace-pre-wrap break-words text-[10px]" {...props} />
-                  </div>
-                ),
-                code: ({ node, inline, ...props }: any) =>
-                  inline ? (
-                    <code className="bg-black/5 dark:bg-black/20 rounded px-1 py-0.5 text-[10px] break-all" {...props} />
-                  ) : (
-                    <code className="block whitespace-pre-wrap break-words text-[10px]" {...props} />
-                  )
-              }}
-            >
+            <div className="text-xs text-muted-foreground/80 leading-relaxed font-mono whitespace-pre-wrap break-words bg-black/5 dark:bg-white/5 p-2 rounded">
               {content.replace(/^> 🧠 \*\*Thinking\*\*: /, '')}
-            </ReactMarkdown>
+            </div>
           </div>
         </div>
       )}
@@ -592,10 +582,10 @@ export default function ChatPage() {
   // Tab Management: Get session title
   const getSessionTitle = (sessionIdForTitle: string) => {
     const session = sessionsData?.sessions?.find(s => s.id === sessionIdForTitle);
-    if (session?.agent_config?.name) {
-      return session.agent_config.name;
+    if (session?.title) {
+      return session.title;
     }
-    return `Chat ${sessionIdForTitle.slice(0, 8)}`;
+    return "New Chat";
   };
 
 
@@ -744,7 +734,7 @@ export default function ChatPage() {
               // Append to existing thinking message
               return [
                 ...prev.slice(0, -1),
-                { ...lastMsg, content: lastMsg.content + "\n" + payload.message }
+                { ...lastMsg, content: lastMsg.content + payload.message }
               ];
             } else {
               return [
@@ -1282,20 +1272,80 @@ export default function ChatPage() {
         <div className="border-b bg-background/50 backdrop-blur-sm px-2 py-1.5 flex items-center gap-2">
           <Tabs value={activeTab} className="flex-1 overflow-hidden">
             <div className="flex items-center gap-2">
-              <div className="flex-1 overflow-x-auto overflow-y-hidden scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
-                <TabsList className="h-9 bg-transparent p-0 gap-1 inline-flex">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 shrink-0 hover:bg-muted/50 text-muted-foreground transition-colors rounded-lg"
+                    title="History"
+                  >
+                    <Clock className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0" align="start">
+                  <div className="flex items-center px-4 py-2 border-b bg-muted/20">
+                    <span className="font-semibold text-xs">Recent Chats</span>
+                  </div>
+                  <ScrollArea className="h-[300px]">
+                    <div className="p-1 space-y-1">
+                      {sessionsData?.sessions?.length === 0 && (
+                        <div className="text-xs text-muted-foreground text-center py-8">
+                          No history found
+                        </div>
+                      )}
+                      {sessionsData?.sessions?.slice().sort((a, b) => b.updated_at - a.updated_at).map(session => (
+                        <Button
+                          key={session.id}
+                          variant="ghost"
+                          className={cn(
+                            "w-full justify-start text-left h-auto py-2 px-3 text-sm font-normal",
+                            activeTab === session.id ? "bg-accent/50 text-accent-foreground" : ""
+                          )}
+                          onClick={() => {
+                            openTab(session.id);
+                          }}
+                        >
+                          <div className="flex flex-col gap-0.5 overflow-hidden">
+                            <span className="truncate font-medium">{session.title || session.agent_config?.name || 'Untitled Chat'}</span>
+                            <span className="text-[10px] text-muted-foreground truncate">
+                              {new Date(session.updated_at * 1000).toLocaleDateString()} • {session.id.slice(0, 8)}
+                            </span>
+                          </div>
+                        </Button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
+
+              <Button
+                onClick={handleNewChat}
+                size="sm"
+                variant="ghost"
+                className="h-8 px-4 gap-2 shrink-0 bg-muted/30 hover:bg-muted text-muted-foreground hover:text-foreground transition-all rounded-t-lg rounded-b-none border-b border-transparent min-w-[100px] justify-start"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="text-sm font-medium">New Chat</span>
+              </Button>
+
+              <div className="w-[1px] h-4 bg-border/50 mx-1" /> {/* Divider */}
+
+              <div className="flex-1 overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden -mb-px">
+                <TabsList className="h-9 bg-transparent p-0 gap-1 inline-flex items-end">
                   {openTabs.map(tabId => (
                     <TabsTrigger
                       key={tabId}
                       value={tabId}
                       onClick={() => openTab(tabId)}
                       className={cn(
-                        "group relative h-8 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200",
+                        "group relative h-8 px-3 py-1.5 text-xs font-medium rounded-t-lg rounded-b-none border border-transparent transition-all duration-200",
                         // Inactive state
-                        "hover:bg-muted text-muted-foreground hover:text-foreground",
-                        // Active State styling (Enhanced)
-                        "data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:font-bold data-[state=active]:shadow-sm",
-                        "border border-transparent data-[state=active]:border-primary/10",
+                        "hover:bg-muted/50 text-muted-foreground hover:text-foreground",
+                        // Active State styling (Seamless Chrome-like)
+                        "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:font-semibold",
+                        "data-[state=active]:border-border data-[state=active]:border-b-transparent",
+                        "data-[state=active]:shadow-none data-[state=active]:z-10",
                         "min-w-[120px] max-w-[200px]",
                         "flex items-center gap-2 justify-between"
                       )}
@@ -1319,15 +1369,7 @@ export default function ChatPage() {
                   ))}
                 </TabsList>
               </div>
-              <Button
-                onClick={handleNewChat}
-                size="sm"
-                variant="ghost"
-                className="h-8 px-3 gap-1.5 shrink-0 hover:bg-primary/10 hover:text-primary transition-colors"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span className="text-xs font-medium">New</span>
-              </Button>
+
             </div>
           </Tabs>
         </div>

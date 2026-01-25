@@ -20,7 +20,6 @@ export default function Navbar() {
           <Link href="/features" className="navbar-link">Features</Link>
           <Link href="/docs" className="navbar-link">Docs</Link>
           <Link href="/blog" className="navbar-link">Blog</Link>
-          <Link href="/pricing" className="navbar-link">Pricing</Link>
           <a
             href="https://github.com/AnyCowork/AnyCowork"
             target="_blank"
@@ -55,9 +54,6 @@ export default function Navbar() {
           </Link>
           <Link href="/blog" className="navbar-mobile-link" onClick={() => setIsMenuOpen(false)}>
             Blog
-          </Link>
-          <Link href="/pricing" className="navbar-mobile-link" onClick={() => setIsMenuOpen(false)}>
-            Pricing
           </Link>
           <a
             href="https://github.com/AnyCowork/AnyCowork"

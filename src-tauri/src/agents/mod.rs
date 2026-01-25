@@ -16,6 +16,7 @@ use rig::providers::gemini;
 use rig::client::ProviderClient;
 use rig::client::CompletionClient;
 use serde_json::{json, Value};
+use log::error;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 use crate::models::Agent as DbAgent;
@@ -200,15 +201,31 @@ impl<R: Runtime> AgentLoop<R> {
             self.history.push(prompt_msg.clone());
 
             // Use chat() to include history context
-            // We revert to blocking chat because stream_chat is not easily available on Agent<M> in this version
-            let response = match agent.chat(&get_message_content(&prompt_msg), current_history).await {
-                Ok(r) => r.to_string(),
-                Err(e) => {
-                    println!("Error: {}", e);
-                        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Token {
-                            content: format!("Error: {}", e),
+            // We implement a retry loop here to handle transient provider errors
+            let mut chat_attempts = 0;
+            let max_chat_attempts = 3;
+            let response = loop {
+                chat_attempts += 1;
+                match agent.chat(&get_message_content(&prompt_msg), current_history.clone()).await {
+                    Ok(r) => {
+                        break r.to_string();
+                    },
+                    Err(e) => {
+                        error!("Agent chat attempt {} failed: {}", chat_attempts, e);
+                        if chat_attempts >= max_chat_attempts {
+                            let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Token {
+                                content: format!("Error: {} after {} attempts.", e, max_chat_attempts),
+                            });
+                            return; // Fatal error
+                        }
+                        
+                        let wait_ms = 1000 * (2u64.pow(chat_attempts as u32 - 1));
+                        let retry_msg = format!("\n⚠️ Connection issue. Retrying in {}s... (Attempt {}/{})\n", wait_ms as f64 / 1000.0, chat_attempts + 1, max_chat_attempts);
+                        let _ = Emitter::emit(window, &format!("session:{}", self.session_id), AgentEvent::Thinking {
+                            message: retry_msg,
                         });
-                    break;
+                        tokio::time::sleep(tokio::time::Duration::from_millis(wait_ms)).await;
+                    }
                 }
             };
 
@@ -407,36 +424,104 @@ impl<R: Runtime> AgentLoop<R> {
         };
 
         // Auto-generate title if this is the first turn
-        if self.history.len() <= 2 {
+        // Auto-generate title logic
+        // 1. New Chat (Default) - handled by UI if title is Null
+        // 2. First Message (History < 3) - Set to first message
+        // 3. LLM Generated (History >= 3) - Generate summary
+        
+        let history_len = self.history.len();
+        
+        // We only check DB if we are in the fallback stage (< 3) to strictly avoid overwriting
+        // OR if we are in the generation window (>= 3)
+        
+        if history_len < 3 {
+             // FALLBACK STAGE: Set title to User Message if it's currently default
+             use crate::schema::sessions;
+             let should_fallback = if let Ok(mut conn) = db_pool.get() {
+                let current_title: Option<String> = sessions::table
+                    .filter(sessions::id.eq(&self.session_id))
+                    .select(sessions::title)
+                    .first(&mut conn)
+                    .unwrap_or(None);
+                
+                // If title is None, empty, or "New Chat" -> Update it
+                match current_title {
+                    Some(t) => t.is_empty() || t == "New Chat",
+                    None => true
+                }
+             } else { false };
+
+             if should_fallback {
+                let fallback_title = user_message.chars().take(30).collect::<String>();
+                if let Ok(mut conn) = db_pool.get() {
+                     let _ = diesel::update(sessions::table.filter(sessions::id.eq(&self.session_id)))
+                         .set(sessions::title.eq(&fallback_title))
+                         .execute(&mut conn);
+                     let _ = Emitter::emit(window, "sessions_updated", ());
+                }
+             }
+        } 
+        
+        else if history_len >= 3 && history_len <= 10 {
+            // LLM GENERATION STAGE: Generate summary
+            // We do this a few times (Turn 2, 3, 4) to refine the title as context grows, then stop to stay stable.
+            
             let session_id_clone = self.session_id.clone();
             let model_clone = self.model.clone();
+            let provider_clone = self.provider.clone();
             let db_pool_clone = db_pool.clone();
             let window_clone = window.clone();
             let user_query = user_message.clone(); // Capture original query
 
             tauri::async_runtime::spawn(async move {
-                let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
-                if !api_key.is_empty() {
-                    let client = openai::Client::from_env();
-                    let title_agent = client.agent(&model_clone)
-                        .preamble("You are a helpful assistant. Generate a very concise title (3-5 words) for a chat session based on the user's first message. Do not use quotes. Do not say 'Title:'. Just the title.")
-                        .build();
+                let preamble = "You are a helpful assistant. Generate a very concise title (3-5 words) for a chat session based on the interaction so far. Do not use quotes. Do not say 'Title:'. Just the title.";
+                
+                let title_result = match provider_clone.as_str() {
+                    "openai" => {
+                        let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
+                        if !api_key.is_empty() {
+                            let client = openai::Client::from_env();
+                            let agent = client.agent(&model_clone).preamble(preamble).build();
+                            agent.prompt(&user_query).await.ok() // Using user_query as prompt trigger, ideally send history but simple prompt often works for title
+                        } else { None }
+                    },
+                    "gemini" => {
+                        let api_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
+                        if !api_key.is_empty() {
+                            let client = gemini::Client::from_env();
+                            // Use Flash for titles if possible for speed, otherwise fallback to current model
+                            let title_model = if model_clone.contains("flash") { model_clone.clone() } else { "gemini-1.5-flash".to_string() };
+                            let agent = client.agent(&title_model).preamble(preamble).build();
+                            agent.prompt(&user_query).await.ok()
+                        } else { None }
+                    },
+                    "anthropic" => {
+                        let api_key = std::env::var("ANTHROPIC_API_KEY").unwrap_or_default();
+                        if !api_key.is_empty() {
+                            let client = anthropic::Client::from_env();
+                             // Use Haiku for titles for speed
+                            let title_model = "claude-3-haiku-20240307"; 
+                            let agent = client.agent(title_model).preamble(preamble).build();
+                            agent.prompt(&user_query).await.ok()
+                        } else { None }
+                    },
+                    _ => None
+                };
 
-                    if let Ok(title) = title_agent.prompt(&user_query).await {
-                         let clean_title = title.trim().trim_matches('"').to_string();
-                         if !clean_title.is_empty() {
-                             // Update DB
-                             use crate::schema::sessions;
-                             if let Ok(mut conn) = db_pool_clone.get() {
-                                 let _ = diesel::update(sessions::table.filter(sessions::id.eq(&session_id_clone)))
-                                     .set(sessions::title.eq(&clean_title))
-                                     .execute(&mut conn);
-                                 
-                                     // Emit update event to refresh sidebar
-                                     let _ = Emitter::emit(&window_clone, "sessions_updated", ());
-                             }
-                         }
-                    }
+                if let Some(title) = title_result {
+                        let clean_title = title.trim().trim_matches('"').to_string();
+                        if !clean_title.is_empty() {
+                            // Update DB
+                            use crate::schema::sessions;
+                            if let Ok(mut conn) = db_pool_clone.get() {
+                                let _ = diesel::update(sessions::table.filter(sessions::id.eq(&session_id_clone)))
+                                    .set(sessions::title.eq(&clean_title))
+                                    .execute(&mut conn);
+                                
+                                    // Emit update event to refresh sidebar
+                                    let _ = Emitter::emit(&window_clone, "sessions_updated", ());
+                            }
+                        }
                 }
             });
         }

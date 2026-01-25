@@ -16,8 +16,8 @@ pub async fn create_agent(
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
     // Default AI config (could be passed in future)
-    let ai_provider = "openai".to_string();
-    let ai_model = "gpt-4o".to_string();
+    let ai_provider = "gemini".to_string();
+    let ai_model = "gemini-3-pro-preview".to_string();
     let ai_config_json = serde_json::json!({
         "provider": ai_provider,
         "model": ai_model

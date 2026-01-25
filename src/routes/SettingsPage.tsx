@@ -463,7 +463,7 @@ function SettingsPage() {
                   >
                     <CardHeader className="p-4">
                       <CardTitle className="text-sm font-medium flex items-center gap-2">
-                        <Zap className="h-4 w-4 text-orange-500" />
+                        <Zap className="h-4 w-4 text-blue-600" />
                         Autopilot
                       </CardTitle>
                       <CardDescription className="text-xs">

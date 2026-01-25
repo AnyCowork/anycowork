@@ -1,12 +1,14 @@
 # AnyCowork: The Smart, Safe, & Optimized AI Coworker
 
+<img src="website/public/screenshot.png" width="800" alt="AnyCowork Screenshot">
+
 **AnyCowork** is an open-source, **local-first** AI coworker that lives on your desktop. Built with **Tauri and Rust** for performance, it uses **Coordinator-Worker** agents to help you accomplish complex tasks safely and efficiently.
 
 ## Core Pillars
 
 - 🧠 **Smart**: Powered by **Gemini 3 Pro** (and other SOTA models), extensible via **MCP** (Model Context Protocol), and customizable with Skills.
 - 🛡️ **Safe**: **Safety by Design**. Granular permissions, human-in-the-loop confirmation for sensitive actions, and strict guardrails.
-- ⚡ **Optimized**: **Rust + Tauri** means <20MB binary size, minimal RAM usage, and instant performance. No Electron bloat.
+- ⚡ **Optimized**: **Rust + Tauri** means ~7MB binary size (.deb), minimal RAM usage, and instant performance. No Electron bloat.
 
 ## Quick Start
 

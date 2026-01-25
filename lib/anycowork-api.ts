@@ -264,17 +264,18 @@ export const anycoworkApi = {
     top_p: 1.0,
     frequency_penalty: 0.0,
     presence_penalty: 0.0,
-    provider: 'openai',
+    provider: 'gemini',
     anthropic_api_key: '',
     anthropic_model: 'claude-3-opus',
     openai_api_key: '',
     openai_model: 'gpt-4',
     gemini_api_key: '',
-    gemini_model: 'gemini-pro'
+    gemini_model: 'gemini-3-pro-preview'
   }),
   updateAIConfig: async (config: any) => ({ success: true }),
   // Messaging (Bridge for UI single-config view)
   getMessagingConfig: async () => {
+
     try {
       const configs = await invoke<any[]>('get_telegram_configs');
       const config = configs[0]; // Use first one for now
@@ -440,7 +441,7 @@ export const anycoworkApi = {
     providers: {
       anthropic: { display_name: 'Anthropic', available: true, default: 'claude-3-opus', models: [] },
       openai: { display_name: 'OpenAI', available: true, default: 'gpt-4', models: [] },
-      gemini: { display_name: 'Google', available: true, default: 'gemini-pro', models: [] }
+      gemini: { display_name: 'Google', available: true, default: 'gemini-3-pro-preview', models: [] }
     },
     defaults: {}
   }),
