@@ -30,6 +30,8 @@ export interface Agent {
   permissions?: AgentPermissions;
   api_keys?: Record<string, string>;
   execution_settings?: ExecutionSettings;
+  workspace_path?: string;
+  scope_type?: string;
 }
 
 export interface AgentCharacteristics {
@@ -47,6 +49,7 @@ export interface AgentPermissions {
 
 export interface ExecutionSettings {
   mode: ExecutionMode | string;
+  sandbox_mode?: 'sandbox' | 'direct' | 'flexible';
   whitelisted_commands?: string[];
   whitelisted_tools?: string[];
   blacklisted_commands?: string[];
@@ -177,6 +180,81 @@ export interface TelegramBotStatus {
   is_running: boolean;
 }
 
+// Skill types
+export interface AgentSkill {
+  id: string;
+  name: string;
+  display_title: string;
+  description: string;
+  skill_content: string;
+  additional_files_json?: string;
+  enabled: number;
+  version: number;
+  created_at: string;
+  updated_at: string;
+  source_path?: string;
+  category?: string;
+  requires_sandbox: number;
+  sandbox_config?: string;
+  execution_mode: string; // "sandbox", "direct", "flexible"
+}
+
+export interface MarketplaceSkill {
+  id: string;
+  name: string;
+  display_title: string;
+  description: string;
+  category?: string;
+  dir_name: string;
+  is_installed: boolean;
+}
+
+export interface SkillFile {
+  id: string;
+  skill_id: string;
+  relative_path: string;
+  content: string;
+  file_type: string;
+  created_at: string;
+}
+
+// MCP Types
+export interface McpServer {
+  id: string;
+  name: string;
+  server_type: 'stdio' | 'sse';
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+  is_enabled: boolean;
+  template_id?: string;
+  created_at: number;
+  updated_at: number;
+  status: 'connected' | 'online' | 'offline' | 'error'; // Frontend only
+}
+
+export interface McpServerUpdate {
+  name?: string;
+  server_type?: 'stdio' | 'sse';
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+  is_enabled?: boolean;
+}
+
+export interface McpTemplate {
+  id: string;
+  name: string;
+  description: string;
+  server_type: 'stdio' | 'sse';
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+}
+
 // API Methods
 export const anycoworkApi = {
   // Agents
@@ -195,8 +273,8 @@ export const anycoworkApi = {
 
   // Chat
   // Note: Rust 'chat' command returns string, not stream yet.
-  sendMessage: async (sessionId: string, message: string, mode?: string) => {
-    return invoke<string>('chat', { sessionId: sessionId, message, mode });
+  sendMessage: async (sessionId: string, message: string, mode?: string, model?: string) => {
+    return invoke<string>('chat', { sessionId: sessionId, message, mode, model });
   },
 
   approveAction: async (stepId: string) => {
@@ -271,7 +349,7 @@ export const anycoworkApi = {
     openai_api_key: '',
     openai_model: 'gpt-4',
     gemini_api_key: '',
-    gemini_model: 'gemini-3-pro-preview'
+    gemini_model: 'gemini-3-flash-preview'
   }),
   updateAIConfig: async (config: any) => ({ success: true }),
   // Messaging (Bridge for UI single-config view)
@@ -401,8 +479,16 @@ export const anycoworkApi = {
   },
   deleteAgent: async (agentId: string) => ({ success: true }),
 
-  // Agent Extras
-  getAgentSkills: async (agentId: string) => ([]),
+  // Agent Skills
+  getAgentSkills: async (agentId: string) => {
+    return invoke<AgentSkill[]>('get_agent_skills', { agentId });
+  },
+  assignSkillToAgent: async (agentId: string, skillId: string) => {
+    return invoke<void>('assign_skill_to_agent', { agentId, skillId });
+  },
+  unassignSkillFromAgent: async (agentId: string, skillId: string) => {
+    return invoke<void>('unassign_skill_from_agent', { agentId, skillId });
+  },
   assignAgentSkills: async (agentId: string, skillIds: string[]) => ({ success: true }),
   getAgentMCPServers: async (agentId: string) => ([]),
   assignAgentMCPServers: async (agentId: string, mcpServerIds: string[]) => ({ success: true }),
@@ -412,11 +498,105 @@ export const anycoworkApi = {
   // Messaging Connections
   listMessagingConnections: async () => ([]),
 
-  // Skills & MCP
-  listSkills: async (type?: string) => ([]),
-  listMarketplaceSkills: async () => ([]),
-  installSkill: async (dirName: string) => ({ success: true }),
-  listMCPServers: async () => ([]),
+  // Skills
+  listSkills: async (enabledOnly?: boolean) => {
+    return invoke<AgentSkill[]>('get_skills', { enabledOnly });
+  },
+  getSkill: async (skillId: string) => {
+    return invoke<AgentSkill>('get_skill', { skillId });
+  },
+  createSkill: async (name: string, displayTitle: string, description: string, skillContent: string, additionalFilesJson?: string) => {
+    return invoke<AgentSkill>('create_skill', {
+      nameParam: name,
+      displayTitle,
+      description,
+      skillContent,
+      additionalFilesJson
+    });
+  },
+  updateSkill: async (skillId: string, data: {
+    name?: string;
+    displayTitle?: string;
+    description?: string;
+    skillContent?: string;
+    additionalFilesJson?: string;
+    enabled?: boolean;
+    category?: string;
+    requiresSandbox?: boolean;
+    sandboxConfig?: string;
+  }) => {
+    return invoke<AgentSkill>('update_skill', {
+      skillId,
+      nameParam: data.name,
+      displayTitle: data.displayTitle,
+      description: data.description,
+      skillContent: data.skillContent,
+      additionalFilesJson: data.additionalFilesJson,
+      enabledParam: data.enabled,
+      category: data.category,
+      requiresSandbox: data.requiresSandbox,
+      sandboxConfig: data.sandboxConfig,
+    });
+  },
+  deleteSkill: async (skillId: string) => {
+    return invoke<void>('delete_skill', { skillId });
+  },
+  toggleSkill: async (skillId: string) => {
+    return invoke<AgentSkill>('toggle_skill', { skillId });
+  },
+  getSkillFiles: async (skillId: string) => {
+    return invoke<SkillFile[]>('get_skill_files', { skillId });
+  },
+
+  // Skill Import/Marketplace
+  listMarketplaceSkills: async () => {
+    return invoke<MarketplaceSkill[]>('list_marketplace_skills', {});
+  },
+  installSkill: async (skillDirName: string) => {
+    return invoke<AgentSkill>('install_marketplace_skill', { skillDirName });
+  },
+  importSkillFromDirectory: async (directoryPath: string) => {
+    return invoke<AgentSkill>('import_skill_from_directory', { directoryPath });
+  },
+  importSkillFromZip: async (zipPath: string) => {
+    return invoke<AgentSkill>('import_skill_from_zip', { zipPath });
+  },
+
+  // Docker Sandbox
+  checkDockerAvailable: async () => {
+    return invoke<boolean>('check_docker_available', {});
+  },
+
+  // Agent Scope
+  updateAgentScope: async (agentId: string, scopeType: string, workspacePath?: string) => {
+    return invoke<void>('update_agent_scope', { agentId, scopeType, workspacePath });
+  },
+
+  // MCP
+  // MCP
+  listMCPServers: async () => {
+    const servers = await invoke<McpServer[]>('get_mcp_servers');
+    // Map status for frontend since backend doesn't return it yet (placeholder)
+    return servers.map(s => ({ ...s, status: s.is_enabled ? 'connected' : 'offline' as any }));
+  },
+  createMCPServer: async (data: McpServerUpdate, templateId?: string) => {
+    return invoke<McpServer>('create_mcp_server', { data, templateId });
+  },
+  updateMCPServer: async (id: string, data: McpServerUpdate) => {
+    return invoke<McpServer>('update_mcp_server', { id, data });
+  },
+  deleteMCPServer: async (id: string) => {
+    return invoke<void>('delete_mcp_server', { id });
+  },
+  getMCPTemplates: async () => {
+    return invoke<McpTemplate[]>('get_mcp_templates');
+  },
+  addMCPToAgent: async (agentId: string, mcpServerId: string) => {
+    return invoke<Agent>('add_mcp_to_agent', { agentId, mcpServerId });
+  },
+  removeMCPFromAgent: async (agentId: string, mcpServerId: string) => {
+    return invoke<Agent>('remove_mcp_from_agent', { agentId, mcpServerId });
+  },
 
   // Federation
   listNodes: async () => ([]),
@@ -441,7 +621,7 @@ export const anycoworkApi = {
     providers: {
       anthropic: { display_name: 'Anthropic', available: true, default: 'claude-3-opus', models: [] },
       openai: { display_name: 'OpenAI', available: true, default: 'gpt-4', models: [] },
-      gemini: { display_name: 'Google', available: true, default: 'gemini-3-pro-preview', models: [] }
+      gemini: { display_name: 'Google', available: true, default: 'gemini-3-flash-preview', models: [] }
     },
     defaults: {}
   }),
@@ -449,4 +629,5 @@ export const anycoworkApi = {
   // Window commands
   toggleDevtools: async () => invoke<void>('toggle_devtools'),
   isDevMode: async () => invoke<boolean>('is_dev_mode'),
+  getCurrentWorkingDirectory: async () => invoke<string>('get_current_working_directory'),
 };

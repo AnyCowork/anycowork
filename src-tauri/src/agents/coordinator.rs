@@ -1,8 +1,9 @@
-use crate::agents::{planner::PlanningAgent, AgentLoop};
+use crate::agents::{planner::PlanningAgent, router::{Router, QueryType}, simple_chat::SimpleChatAgent, AgentLoop};
 use crate::database::DbPool;
 use crate::events::{AgentEvent, ExecutionJob};
 use crate::models::Agent as DbAgent;
 use crate::permissions::PermissionManager;
+use log::info;
 use std::sync::Arc;
 use tauri::{Emitter, Runtime};
 use tokio::sync::oneshot;
@@ -21,13 +22,19 @@ pub struct Coordinator<R: Runtime> {
 impl<R: Runtime> Coordinator<R> {
     pub fn new(
         session_id: String,
-        agent_db: DbAgent,
+        mut agent_db: DbAgent, // Make mutable to allow override
         window: tauri::WebviewWindow<R>,
         db_pool: DbPool,
         permission_manager: Arc<PermissionManager>,
         pending_approvals: Arc<dashmap::DashMap<String, oneshot::Sender<bool>>>,
         mode: String,
+        model_override: Option<String>,
     ) -> Self {
+        // Apply model override if present
+        if let Some(model) = model_override {
+            agent_db.ai_model = model;
+        }
+
         Self {
             session_id,
             agent_db,
@@ -68,7 +75,7 @@ impl<R: Runtime> Coordinator<R> {
                 },
             );
 
-            let mut worker = AgentLoop::new(&self.agent_db).await;
+            let mut worker = AgentLoop::new(&self.agent_db, self.db_pool.clone()).await;
             worker.session_id = self.session_id.clone();
 
             worker
@@ -85,6 +92,80 @@ impl<R: Runtime> Coordinator<R> {
             return;
         }
 
+        // SMART ROUTING: Classify query complexity
+        let _ = Emitter::emit(
+            &self.window,
+            &format!("session:{}", self.session_id),
+            AgentEvent::Thinking {
+                message: "Analyzing query...".to_string(),
+            },
+        );
+
+        let router = Router::new(
+            self.agent_db.ai_model.clone(),
+            self.agent_db.ai_provider.clone(),
+        );
+        let query_type = router.classify(&user_message).await;
+        info!("Query classified as: {:?}", query_type);
+
+        // SIMPLE QUERY: Use simple chat agent (no tools)
+        if query_type == QueryType::Simple {
+            let _ = Emitter::emit(
+                &self.window,
+                &format!("session:{}", self.session_id),
+                AgentEvent::Thinking {
+                    message: "Responding...".to_string(),
+                },
+            );
+
+            let chat_agent = SimpleChatAgent::new(&self.agent_db);
+            match chat_agent
+                .chat(
+                    &user_message,
+                    &self.session_id,
+                    &self.window,
+                    &self.db_pool,
+                )
+                .await
+            {
+                Ok(response) => {
+                    let _ = Emitter::emit(
+                        &self.window,
+                        &format!("session:{}", self.session_id),
+                        AgentEvent::JobCompleted {
+                            job: ExecutionJob {
+                                status: "completed".to_string(),
+                                ..job.clone()
+                            },
+                            message: response,
+                        },
+                    );
+                }
+                Err(e) => {
+                    let _ = Emitter::emit(
+                        &self.window,
+                        &format!("session:{}", self.session_id),
+                        AgentEvent::Token {
+                            content: format!("Error: {}", e),
+                        },
+                    );
+                    let _ = Emitter::emit(
+                        &self.window,
+                        &format!("session:{}", self.session_id),
+                        AgentEvent::JobCompleted {
+                            job: ExecutionJob {
+                                status: "failed".to_string(),
+                                ..job.clone()
+                            },
+                            message: format!("Error: {}", e),
+                        },
+                    );
+                }
+            }
+            return;
+        }
+
+        // COMPLEX QUERY: Use planning-executor pattern
         // 1. Planning Phase
         let _ = Emitter::emit(
             &self.window,
@@ -136,7 +217,7 @@ impl<R: Runtime> Coordinator<R> {
         // 2. Execution Phase
         // Initialize Worker (AgentLoop)
         // We reuse the same agent loop for sequential tasks to maintain context
-        let mut worker = AgentLoop::new(&self.agent_db).await;
+        let mut worker = AgentLoop::new(&self.agent_db, self.db_pool.clone()).await;
         worker.session_id = self.session_id.clone();
 
         for (i, task) in plan.tasks.iter().enumerate() {

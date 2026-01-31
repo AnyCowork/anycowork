@@ -34,8 +34,12 @@ impl SnapshotManager {
         let mut file_hashes = HashMap::new();
 
         let walker = WalkDir::new(&self.root_path).into_iter().filter_entry(|e| {
+            // Always allow the root directory itself
+            if e.depth() == 0 {
+                return true;
+            }
             let name = e.file_name().to_string_lossy();
-            // Skip hidden files/dirs and common large directories
+            // Skip hidden files/dirs and common large directories (except root)
             !name.starts_with('.')
                 && name != "target"
                 && name != "node_modules"
@@ -118,19 +122,28 @@ mod tests {
 
         // 1. Create file A
         let file_a = root.join("file_a.txt");
-        let mut f = File::create(&file_a).unwrap();
-        f.write_all(b"Hello").unwrap();
+        {
+            let mut f = File::create(&file_a).unwrap();
+            f.write_all(b"Hello").unwrap();
+            f.sync_all().unwrap(); // Ensure data is written to disk
+        } // File handle dropped here
 
         let snap1 = manager.create_snapshot().unwrap();
         assert_eq!(snap1.file_hashes.len(), 1);
 
         // 2. Modify A, Create B
-        let mut f = File::create(&file_a).unwrap(); // Overwrite
-        f.write_all(b"Hello World").unwrap();
+        {
+            let mut f = File::create(&file_a).unwrap(); // Overwrite
+            f.write_all(b"Hello World").unwrap();
+            f.sync_all().unwrap();
+        }
 
         let file_b = root.join("file_b.txt");
-        let mut f = File::create(&file_b).unwrap();
-        f.write_all(b"New File").unwrap();
+        {
+            let mut f = File::create(&file_b).unwrap();
+            f.write_all(b"New File").unwrap();
+            f.sync_all().unwrap();
+        }
 
         let snap2 = manager.create_snapshot().unwrap();
         assert_eq!(snap2.file_hashes.len(), 2);

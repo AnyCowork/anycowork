@@ -17,7 +17,7 @@ pub async fn create_agent(
 
     // Default AI config (could be passed in future)
     let ai_provider = "gemini".to_string();
-    let ai_model = "gemini-3-pro-preview".to_string();
+    let ai_model = "gemini-3-flash-preview".to_string();
     let ai_config_json = serde_json::json!({
         "provider": ai_provider,
         "model": ai_model
@@ -48,6 +48,8 @@ pub async fn create_agent(
         updated_at: chrono::Utc::now().timestamp(),
         platform_configs: None,
         execution_settings: None,
+        scope_type: None,
+        workspace_path: None,
     };
 
     diesel::insert_into(agents::table)
@@ -126,6 +128,29 @@ pub async fn update_agent(
 
     if let Some(s) = data.skills {
         agent.skills = Some(s.join(", "));
+
+        // Sync agent_skill_assignments
+        use crate::models::NewAgentSkillAssignment;
+        use schema::agent_skill_assignments::dsl::{agent_skill_assignments, agent_id as col_agent_id, skill_id as col_skill_id};
+
+        // 1. Delete existing assignments for this agent
+        diesel::delete(agent_skill_assignments.filter(col_agent_id.eq(&agent_id)))
+            .execute(&mut conn)
+            .map_err(|e| format!("Failed to clear old skill assignments: {}", e))?;
+
+        // 2. Insert new assignments
+        if !s.is_empty() {
+             let new_assignments: Vec<NewAgentSkillAssignment> = s.iter().map(|sid| NewAgentSkillAssignment {
+                agent_id: agent_id.clone(),
+                skill_id: sid.clone(),
+                created_at: chrono::Utc::now().naive_utc(),
+            }).collect();
+
+            diesel::insert_into(agent_skill_assignments)
+                .values(&new_assignments)
+                .execute(&mut conn)
+                .map_err(|e| format!("Failed to insert new skill assignments: {}", e))?;
+        }
     }
 
     if let Some(m) = data.mcp_servers {
@@ -304,6 +329,7 @@ pub async fn chat_internal<R: Runtime>(
     session_id: String,
     message: String,
     mode: Option<String>,
+    model: Option<String>,
 ) -> Result<String, String> {
     use crate::models::Session;
     use schema::agents::dsl::agents;
@@ -350,6 +376,7 @@ pub async fn chat_internal<R: Runtime>(
         state.permission_manager.clone(),
         state.db_pool.clone(),
         mode.unwrap_or_else(|| "planning".to_string()),
+        model,
     );
 
     Ok("started".to_string())
@@ -362,8 +389,9 @@ pub async fn chat(
     session_id: String,
     message: String,
     mode: Option<String>,
+    model: Option<String>,
 ) -> Result<String, String> {
-    chat_internal(window, state, session_id, message, mode).await
+    chat_internal(window, state, session_id, message, mode, model).await
 }
 
 #[tauri::command]

@@ -8,7 +8,7 @@ import { Options } from 'selenium-webdriver/chrome';
 
 export const E2E_CONFIG = {
   // Default model for testing
-  DEFAULT_MODEL: 'gemini-3-pro-preview',
+  DEFAULT_MODEL: 'gemini-3-flash-preview',
   DEFAULT_PROVIDER: 'gemini',
 
   // Test timeouts

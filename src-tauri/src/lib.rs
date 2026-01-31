@@ -2,10 +2,12 @@ pub mod agents;
 pub mod commands;
 pub mod database;
 pub mod events;
+pub mod llm;
 pub mod mcp;
 pub mod models;
 pub mod permissions;
 pub mod schema;
+pub mod skills;
 pub mod snapshots;
 pub mod telegram;
 pub mod tools;
@@ -117,9 +119,32 @@ pub fn run() {
             commands::update_skill,
             commands::delete_skill,
             commands::toggle_skill,
+            // Skill import and marketplace commands
+            commands::import_skill_from_directory,
+            commands::import_skill_from_zip,
+            commands::list_marketplace_skills,
+            commands::install_marketplace_skill,
+            commands::get_skill_files,
+            // MCP commands
+            commands::get_mcp_servers,
+            commands::create_mcp_server,
+            commands::update_mcp_server,
+            commands::delete_mcp_server,
+            commands::get_mcp_templates,
+            commands::add_mcp_to_agent,
+            commands::remove_mcp_from_agent,
+            // Agent skill assignment commands
+            commands::assign_skill_to_agent,
+            commands::unassign_skill_from_agent,
+            commands::get_agent_skills,
+            // Docker sandbox commands
+            commands::check_docker_available,
+            // Agent scope commands
+            commands::update_agent_scope,
             // Window commands
             commands::toggle_devtools,
-            commands::is_dev_mode
+            commands::is_dev_mode,
+            commands::get_current_working_directory
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

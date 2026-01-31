@@ -1,10 +1,14 @@
 pub mod optimizations;
 pub mod processor;
+pub mod router;
+pub mod simple_chat;
 
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod workflow_tests;
+#[cfg(test)]
+mod skill_tests;
 
 use crate::database::DbPool;
 use crate::events::{AgentEvent, ExecutionJob, ExecutionStep};
@@ -43,30 +47,138 @@ pub struct AgentLoop<R: Runtime> {
     pub session_id: String,
     pub model: String,
     pub provider: String,
+    pub system_prompt: Option<String>,
     pub history: Vec<rig::completion::Message>,
     pub tools: Vec<Box<dyn Tool<R>>>,
     pub snapshot_manager: crate::snapshots::SnapshotManager,
 }
 
 impl<R: Runtime> AgentLoop<R> {
-    pub async fn new(agent_db: &DbAgent) -> Self {
+    pub async fn new(agent_db: &DbAgent, db_pool: DbPool) -> Self {
         // Register default tools
-        let tools: Vec<Box<dyn Tool<R>>> = vec![
-            Box::new(FilesystemTool),
+        // Initialize workspace path early
+        let workspace_path = if let Some(path) = &agent_db.workspace_path {
+             std::path::PathBuf::from(path)
+        } else {
+             std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+        };
+
+        // Parse Execution Settings
+        // sandbox_mode controls skill/tool execution (sandbox, direct, flexible)
+        // mode controls approval workflow (autopilot, require_approval, smart_approval)
+        let execution_mode = if let Some(settings_str) = &agent_db.execution_settings {
+             if let Ok(json) = serde_json::from_str::<serde_json::Value>(settings_str) {
+                 // Use sandbox_mode for tool execution, default to "flexible"
+                 json.get("sandbox_mode").and_then(|m| m.as_str()).unwrap_or("flexible").to_string()
+             } else {
+                 "flexible".to_string()
+             }
+        } else {
+             "flexible".to_string()
+        };
+
+        // Register default tools
+        let mut tools: Vec<Box<dyn Tool<R>>> = vec![
+            Box::new(FilesystemTool::new(workspace_path.clone())),
             Box::new(SearchTool),
-            Box::new(BashTool),
+            Box::new(BashTool::new(workspace_path.clone(), execution_mode.clone())),
         ];
+
+        // Load Assigned Skills
+        if let Ok(mut conn) = db_pool.get() {
+            use crate::schema::{agent_skill_assignments, agent_skills, skill_files};
+            
+            // 1. Get assigned skill IDs
+            let assigned_ids: Result<Vec<String>, _> = agent_skill_assignments::table
+                .filter(agent_skill_assignments::agent_id.eq(&agent_db.id))
+                .select(agent_skill_assignments::skill_id)
+                .load::<String>(&mut conn);
+
+            if let Ok(skill_ids) = assigned_ids {
+                // 2. Fetch Skills
+                let skills: Result<Vec<crate::models::AgentSkill>, _> = agent_skills::table
+                    .filter(agent_skills::id.eq_any(&skill_ids))
+                    .filter(agent_skills::enabled.eq(1))
+                    .load::<crate::models::AgentSkill>(&mut conn);
+
+                if let Ok(skills_list) = skills {
+                    for skill_db in skills_list {
+                        // 3. Fetch Skill Files
+                        let files_list: Result<Vec<crate::models::SkillFile>, _> = skill_files::table
+                            .filter(skill_files::skill_id.eq(&skill_db.id))
+                            .load::<crate::models::SkillFile>(&mut conn);
+
+                        let mut files_map = std::collections::HashMap::new();
+                        if let Ok(files) = files_list {
+                            for f in files {
+                                files_map.insert(f.relative_path, crate::skills::loader::SkillFileContent {
+                                    content: f.content,
+                                    file_type: f.file_type,
+                                });
+                            }
+                        }
+                    
+                        // Construct LoadedSkill
+                        let sandbox_config = if let Some(sc_json) = &skill_db.sandbox_config {
+                            serde_json::from_str(sc_json).ok()
+                        } else {
+                            None
+                        };
+
+                        let parsed_skill = crate::models::ParsedSkill {
+                            name: skill_db.name.clone(),
+                            description: skill_db.description.clone(),
+                            license: None,
+                            triggers: None,
+                            sandbox_config,
+                            body: skill_db.skill_content.clone(),
+                            category: skill_db.category.clone(),
+                            requires_sandbox: skill_db.requires_sandbox == 1,
+                            execution_mode: Some(skill_db.execution_mode.clone()),
+                        };
+
+                        let loaded_skill = crate::skills::loader::LoadedSkill {
+                            skill: parsed_skill,
+                            files: files_map,
+                        };
+
+                        // Determine workspace path
+                        let workspace_path = if let Some(path) = &agent_db.workspace_path {
+                            let p = std::path::PathBuf::from(path);
+                            // Ensure it exists
+                            std::fs::create_dir_all(&p).unwrap_or(());
+                            p
+                        } else {
+                            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+                        };
+
+                        // Create SkillTool
+                        let skill_tool = crate::skills::SkillTool::new(
+                            loaded_skill, 
+                            workspace_path.clone(),
+                            execution_mode.clone() // Pass agent mode
+                        );
+                        tools.push(Box::new(skill_tool));
+                    }
+                }
+            }
+        }
+
+        let workspace_path = if let Some(path) = &agent_db.workspace_path {
+             std::path::PathBuf::from(path)
+        } else {
+             std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+        };
 
         Self {
             agent_id: agent_db.id.clone(),
             session_id: "temp".to_string(), // Set later
             model: agent_db.ai_model.clone(),
             provider: agent_db.ai_provider.clone(),
+            system_prompt: agent_db.system_prompt.clone(),
             history: vec![],
             tools,
-            snapshot_manager: crate::snapshots::SnapshotManager::new(
-                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
-            ),
+            snapshot_manager: crate::snapshots::SnapshotManager::new(workspace_path),
         }
     }
 
@@ -135,6 +247,13 @@ impl<R: Runtime> AgentLoop<R> {
             })
             .unwrap();
 
+        // Combine agent's system prompt with tools prompt
+        let full_preamble = if let Some(ref custom_prompt) = self.system_prompt {
+            format!("{}\n\n---\n\n{}", custom_prompt, tools_prompt)
+        } else {
+            tools_prompt.clone()
+        };
+
         // Select and Build Agent based on Provider
         // Dispatching to a common handler or using Box<dyn Chat> would be ideal,
         // but Rig agents are typed by their completion model.
@@ -148,7 +267,7 @@ impl<R: Runtime> AgentLoop<R> {
                     return;
                 }
                 let client = openai::Client::from_env();
-                let agent = client.agent(&self.model).preamble(&tools_prompt).build();
+                let agent = client.agent(&self.model).preamble(&full_preamble).build();
                 self.run_loop(
                     agent,
                     &window,
@@ -166,7 +285,7 @@ impl<R: Runtime> AgentLoop<R> {
                     return;
                 }
                 let client = gemini::Client::from_env();
-                let agent = client.agent(&self.model).preamble(&tools_prompt).build();
+                let agent = client.agent(&self.model).preamble(&full_preamble).build();
                 self.run_loop(
                     agent,
                     &window,
@@ -184,7 +303,7 @@ impl<R: Runtime> AgentLoop<R> {
                     return;
                 }
                 let client = anthropic::Client::from_env();
-                let agent = client.agent(&self.model).preamble(&tools_prompt).build();
+                let agent = client.agent(&self.model).preamble(&full_preamble).build();
                 self.run_loop(
                     agent,
                     &window,
@@ -283,6 +402,7 @@ impl<R: Runtime> AgentLoop<R> {
                                     ),
                                 },
                             );
+                            println!("CRITICAL AGENT ERROR: {}", e);
                             return; // Fatal error
                         }
 
@@ -648,7 +768,7 @@ impl<R: Runtime> AgentLoop<R> {
                             let title_model = if model_clone.contains("flash") {
                                 model_clone.clone()
                             } else {
-                                "gemini-1.5-flash".to_string()
+                                "gemini-3-flash-preview".to_string()
                             };
                             let agent = client.agent(&title_model).preamble(preamble).build();
                             agent.prompt(&user_query).await.ok()
@@ -796,6 +916,7 @@ pub fn start_chat_task<R: Runtime>(
     permission_manager: Arc<PermissionManager>,
     db_pool: DbPool,
     mode: String,
+    model_override: Option<String>,
 ) {
     let coordinator = Coordinator::new(
         session_id,
@@ -805,6 +926,7 @@ pub fn start_chat_task<R: Runtime>(
         permission_manager,
         pending_approvals,
         mode,
+        model_override,
     );
 
     tauri::async_runtime::spawn(async move {

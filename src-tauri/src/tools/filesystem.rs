@@ -8,7 +8,15 @@ use std::path::PathBuf;
 
 use tauri::Runtime;
 
-pub struct FilesystemTool;
+pub struct FilesystemTool {
+    pub workspace_path: PathBuf,
+}
+
+impl FilesystemTool {
+    pub fn new(workspace_path: PathBuf) -> Self {
+        Self { workspace_path }
+    }
+}
 
 #[async_trait]
 impl<R: Runtime> Tool<R> for FilesystemTool {
@@ -65,37 +73,36 @@ impl<R: Runtime> Tool<R> for FilesystemTool {
 
         // Security check moved to validate_args
 
-        // Permission check for write operations
-        let requires_approval = matches!(
-            op,
-            "write_file" | "delete_file" | "make_dir" | "read_file" | "list_dir"
-        );
+        // Permission check
+        let (permission_type, msg_verb) = match op {
+            "read_file" | "list_dir" => (PermissionType::FilesystemRead, "read"),
+            "write_file" | "delete_file" | "make_dir" => (PermissionType::FilesystemWrite, "modify"),
+            _ => (PermissionType::FilesystemWrite, "access"), // Fallback to stricter permission
+        };            
 
-        if requires_approval {
-            let perm_req = PermissionRequest {
-                id: uuid::Uuid::new_v4().to_string(),
-                permission_type: PermissionType::FilesystemWrite,
-                message: format!("Agent wants to {} at {}", op.replace("_", " "), path_str),
-                metadata: {
-                    let mut map = HashMap::new();
-                    map.insert("operation".to_string(), op.to_string());
-                    map.insert("path".to_string(), path_str.to_string());
-                    map.insert("resource".to_string(), path_str.to_string());
-                    map.insert("session_id".to_string(), ctx.session_id.clone());
-                    map
-                },
-            };
+        let perm_req = PermissionRequest {
+            id: uuid::Uuid::new_v4().to_string(),
+            permission_type,
+            message: format!("Agent wants to {} {} at {}", msg_verb, if op == "list_dir" { "directory" } else { "file" }, path_str),
+            metadata: {
+                let mut map = HashMap::new();
+                map.insert("operation".to_string(), op.to_string());
+                map.insert("path".to_string(), path_str.to_string());
+                map.insert("resource".to_string(), path_str.to_string());
+                map.insert("session_id".to_string(), ctx.session_id.clone());
+                map
+            },
+        };
 
-            if !ctx
-                .permissions
-                .request_permission(ctx.window.as_ref(), perm_req)
-                .await?
-            {
-                return Err("Permission denied".to_string());
-            }
+        if !ctx
+            .permissions
+            .request_permission(ctx.window.as_ref(), perm_req)
+            .await?
+        {
+            return Err("Permission denied".to_string());
         }
 
-        let root = std::env::current_dir().unwrap_or(PathBuf::from("."));
+        let root = self.workspace_path.clone();
         let target_path = root.join(path_str);
 
         match op {
@@ -148,7 +155,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_validate_args() {
-        let tool: Box<dyn Tool<tauri::test::MockRuntime>> = Box::new(FilesystemTool);
+        let tool: Box<dyn Tool<tauri::test::MockRuntime>> = Box::new(FilesystemTool::new(PathBuf::from(".")));
 
         // Valid path
         let args = json!({"operation": "list_dir", "path": "src"});
@@ -165,7 +172,7 @@ mod tests {
 
     #[test]
     fn test_needs_summarization() {
-        let tool: Box<dyn Tool<tauri::test::MockRuntime>> = Box::new(FilesystemTool);
+        let tool: Box<dyn Tool<tauri::test::MockRuntime>> = Box::new(FilesystemTool::new(PathBuf::from(".")));
         let empty = json!({});
 
         // read_file -> true

@@ -1,9 +1,8 @@
 use super::{filesystem::FilesystemTool, office::OfficeTool, search::SearchTool, Tool};
 use serde_json::json;
 use std::fs;
-use std::io::Write;
+use std::path::PathBuf;
 use tauri::test::MockRuntime;
-use tempfile::NamedTempFile;
 
 /// Scenario 1: Search and Report Workflow
 /// 1. List files to find target
@@ -11,7 +10,8 @@ use tempfile::NamedTempFile;
 /// 3. Create DOCX report with findings
 #[tokio::test]
 async fn test_search_and_report_workflow() {
-    let fs_tool: Box<dyn Tool<MockRuntime>> = Box::new(FilesystemTool);
+    let workspace = PathBuf::from(".");
+    let fs_tool: Box<dyn Tool<MockRuntime>> = Box::new(FilesystemTool::new(workspace));
     let search_tool: Box<dyn Tool<MockRuntime>> = Box::new(SearchTool);
     let office_tool: Box<dyn Tool<MockRuntime>> = Box::new(OfficeTool);
 
@@ -118,8 +118,9 @@ async fn test_search_and_report_workflow() {
 /// 3. Write summary to text file
 #[tokio::test]
 async fn test_csv_analysis_workflow() {
+    let workspace = PathBuf::from(".");
     let office_tool: Box<dyn Tool<MockRuntime>> = Box::new(OfficeTool);
-    let fs_tool: Box<dyn Tool<MockRuntime>> = Box::new(FilesystemTool);
+    let fs_tool: Box<dyn Tool<MockRuntime>> = Box::new(FilesystemTool::new(workspace));
 
     // Setup CSV
     let csv_file = "test_data.csv";

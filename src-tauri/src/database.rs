@@ -26,9 +26,11 @@ pub fn establish_connection() -> DbPool {
 }
 
 pub fn run_migrations(pool: &DbPool) {
+    log::info!("Checking for pending database migrations...");
     let mut conn = pool.get().expect("Failed to get connection for migrations");
     conn.run_pending_migrations(MIGRATIONS)
         .expect("Failed to run migrations");
+    log::info!("Database migrations executed successfully.");
 }
 
 pub fn ensure_default_agent(pool: &DbPool) {
@@ -63,12 +65,12 @@ pub fn ensure_default_agent(pool: &DbPool) {
             tone: None,
             expertise: None,
             ai_provider: "gemini".to_string(),
-            ai_model: "gemini-3-pro-preview".to_string(),
+            ai_model: "gemini-3-flash-preview".to_string(),
             ai_temperature: 0.7,
-            ai_config: r#"{"provider": "gemini", "model": "gemini-3-pro-preview"}"#.to_string(),
+            ai_config: r#"{"provider": "gemini", "model": "gemini-3-flash-preview"}"#.to_string(),
             system_prompt: Some(
                 r#"You are an intelligent AI Coworker designed to help with daily office tasks.
-Your goal is to be proactive, organized, and helpful. 
+Your goal is to be proactive, organized, and helpful.
 You should:
 1. Ask clarifying questions when requirements are vague.
 2. Build and maintain a todo list for complex tasks.
@@ -87,6 +89,8 @@ You should:
             updated_at: chrono::Utc::now().timestamp(),
             platform_configs: None,
             execution_settings: None,
+            scope_type: None,
+            workspace_path: None,
         };
 
         match diesel::insert_into(agents)

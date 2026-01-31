@@ -56,6 +56,8 @@ mod daily_workflow_tests {
             updated_at: chrono::Utc::now().timestamp(),
             platform_configs: None,
             execution_settings: None,
+            scope_type: None,
+            workspace_path: None,
         };
 
         let mut conn = pool.get().expect("Failed to get connection");

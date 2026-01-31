@@ -41,6 +41,8 @@ fn create_test_agent_db(pool: &DbPool, name: &str) -> Agent {
         updated_at: chrono::Utc::now().timestamp(),
         platform_configs: None,
         execution_settings: None,
+        scope_type: None,
+        workspace_path: None,
     };
 
     let mut conn = pool.get().expect("Failed to get DB connection");
@@ -108,7 +110,7 @@ mod agent_loop_tests {
         let pool = create_test_pool();
         let agent = create_test_agent_db(&pool, "LoopTestAgent");
 
-        let agent_loop = AgentLoop::<tauri::Wry>::new(&agent).await;
+        let agent_loop = AgentLoop::<tauri::Wry>::new(&agent, pool.clone()).await;
 
         assert_eq!(agent_loop.agent_id, agent.id);
         assert_eq!(agent_loop.model, agent.ai_model);
@@ -121,7 +123,7 @@ mod agent_loop_tests {
         let pool = create_test_pool();
         let agent = create_test_agent_db(&pool, "ToolsTestAgent");
 
-        let agent_loop = AgentLoop::<tauri::Wry>::new(&agent).await;
+        let agent_loop = AgentLoop::<tauri::Wry>::new(&agent, pool.clone()).await;
 
         let tool_names: Vec<String> = agent_loop
             .tools
@@ -153,19 +155,8 @@ mod message_history_tests {
         assert_eq!(history.len(), 2);
         assert!(matches!(history[0], Message::User { .. }));
         assert!(matches!(history[1], Message::Assistant { .. }));
-        // Verify content helper works
-        assert_eq!(get_message_content(&history[0]), "\"Hello\""); // get_message_content formats with Debug which adds quotes?
-                                                                   // Wait, optimizations.rs impl: content.iter().map(|c| format!("{:?}", c))...
-                                                                   // String debug format adds quotes.
-                                                                   // UserContent::Text(t) -> t is String.
-                                                                   // Wait, format!("{:?}", c) where c is UserContent.
-                                                                   // UserContent debug likely prints variant or text?
-                                                                   // If UserContent is Enum Text(String), debug might be `Text("Hello")`.
-                                                                   // If From<String> creates Text, then yes.
-                                                                   // Let's hold on assertions if I am unsure of Debug format.
-                                                                   // But simply compiling is the goal first.
-                                                                   // I'll skip content assertion strictness or use contains.
-                                                                   // Or check `get_message_content`.
+        // Verify content helper works - get_message_content uses Debug format
+        assert!(get_message_content(&history[0]).contains("Hello"));
     }
 
     #[test]
@@ -190,13 +181,15 @@ mod message_history_tests {
 #[cfg(test)]
 mod tool_integration_tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn test_tool_schema_generation() {
+        let workspace = PathBuf::from("/tmp/test_workspace");
         let tools: Vec<Box<dyn Tool<tauri::Wry>>> = vec![
-            Box::new(crate::tools::filesystem::FilesystemTool),
+            Box::new(crate::tools::filesystem::FilesystemTool::new(workspace.clone())),
             Box::new(crate::tools::search::SearchTool),
-            Box::new(crate::tools::bash::BashTool),
+            Box::new(crate::tools::bash::BashTool::new(workspace, "direct".to_string())),
         ];
 
         for tool in tools.iter() {
@@ -247,7 +240,7 @@ mod performance_tests {
         let start = Instant::now();
 
         for _ in 0..100 {
-            let _ = AgentLoop::<tauri::Wry>::new(&agent).await;
+            let _ = AgentLoop::<tauri::Wry>::new(&agent, pool.clone()).await;
         }
 
         let duration = start.elapsed();

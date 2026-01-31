@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod mcp;
 pub mod pages;
 pub mod sessions;
 pub mod skills;
@@ -7,6 +8,7 @@ pub mod window;
 
 // Re-export commands for easy registration
 pub use agents::*;
+pub use mcp::*;
 pub use pages::*;
 pub use sessions::*;
 pub use skills::*;

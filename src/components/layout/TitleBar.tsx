@@ -1,11 +1,13 @@
 import { useEffect, useState, type PointerEvent } from "react";
-import { Minus, Square, X, Bug } from "lucide-react";
+import { Minus, Square, X, Bug, Sun, Moon, Monitor } from "lucide-react";
 import { Window } from "@tauri-apps/api/window";
 import { anycoworkApi } from "@/lib/anycowork-api";
+import { useTheme } from "@/components/providers/theme-provider";
 
 export function TitleBar() {
     const [appWindow, setAppWindow] = useState<Window | null>(null);
     const [isDevMode, setIsDevMode] = useState(false);
+    const { theme, setTheme, resolvedTheme } = useTheme();
 
     useEffect(() => {
         import("@tauri-apps/api/window").then((module) => {
@@ -27,6 +29,13 @@ export function TitleBar() {
     const handleClose = () => appWindow?.close();
     const handleToggleDevtools = () => anycoworkApi.toggleDevtools();
 
+    const handleToggleTheme = () => {
+        const themes: Array<"light" | "dark" | "system"> = ["light", "dark", "system"];
+        const currentIndex = themes.indexOf(theme);
+        const nextIndex = (currentIndex + 1) % themes.length;
+        setTheme(themes[nextIndex]);
+    };
+
     const handleDrag = (e: PointerEvent) => {
         // Only drag if the target is the container itself or explicitly strictly marked
         // This prevents dragging when clicking buttons if they propagate
@@ -44,10 +53,10 @@ export function TitleBar() {
         <div
             data-tauri-drag-region
             onPointerDown={handleDrag}
-            className="h-8 flex justify-between items-center bg-background border-b select-none w-full cursor-default rounded-t-xl flex-shrink-0"
+            className="h-9 flex justify-between items-center bg-muted/80 border-b border-border/60 select-none w-full cursor-default rounded-t-xl flex-shrink-0"
         >
             <div className="flex items-center px-4 pointer-events-none">
-                <span className="text-xs font-bold text-muted-foreground">
+                <span className="text-xs font-semibold text-foreground/70">
                     AnyCowork
                 </span>
             </div>
@@ -62,6 +71,19 @@ export function TitleBar() {
                         <Bug className="h-4 w-4" strokeWidth={1.5} />
                     </button>
                 )}
+                <button
+                    onClick={handleToggleTheme}
+                    className="inline-flex justify-center items-center h-full w-10 hover:bg-accent focus:outline-none transition-colors"
+                    title={`Theme: ${theme} (click to cycle)`}
+                >
+                    {theme === "system" ? (
+                        <Monitor className="h-4 w-4" strokeWidth={1.5} />
+                    ) : resolvedTheme === "dark" ? (
+                        <Moon className="h-4 w-4" strokeWidth={1.5} />
+                    ) : (
+                        <Sun className="h-4 w-4" strokeWidth={1.5} />
+                    )}
+                </button>
                 <button
                     onClick={handleMinimize}
                     className="inline-flex justify-center items-center h-full w-10 hover:bg-accent focus:outline-none transition-colors"

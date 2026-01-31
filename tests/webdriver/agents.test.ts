@@ -46,12 +46,12 @@ describe('Agent Management E2E Tests', () => {
             // Select Gemini 3 Pro
             const modelSelect = await driver.findElement(By.css('select[name="ai_model"]'));
             await modelSelect.click();
-            const option = await driver.findElement(By.css('select[name="ai_model"] option[value="gemini-3-pro-preview"]'));
+            const option = await driver.findElement(By.css('select[name="ai_model"] option[value="gemini-3-flash-preview"]'));
             await option.click();
 
             // Verify selection (getting value from select usually returns the value of selected option)
             const selectedModel = await modelSelect.getAttribute('value');
-            expect(selectedModel).toBe('gemini-3-pro-preview');
+            expect(selectedModel).toBe('gemini-3-flash-preview');
 
             // Set personality
             const personalitySelect = await driver.findElement(By.css('select[name="personality"]'));

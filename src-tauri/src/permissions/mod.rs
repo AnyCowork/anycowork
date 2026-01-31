@@ -1,3 +1,7 @@
+pub mod scope;
+
+pub use scope::{ScopeEnforcer, ScopeType};
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

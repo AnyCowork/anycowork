@@ -145,7 +145,28 @@ User Message → AgentLoop.run()
 - `Token` - Streaming response chunk
 - `JobCompleted` - Agent finished
 
-### 3. Telegram Integration (telegram.rs)
+- `JobCompleted` - Agent finished
+ 
+ ### 3. Skills System (skills/)
+ 
+ **Purpose**: Extensible capabilities for agents
+ 
+ **Components**:
+ - **SkillTool**: Tool wrapper for executing skills
+ - **DockerSandbox**: Verification and isolation environment
+ - **SkillLoader**: Loads skills from filesystem/marketplace
+ 
+ **Skill Structure**:
+ - `skill.yaml`: Metadata (name, description, triggers)
+ - `README.md`: User documentation
+ - Source Files: Python scripts, Node.js scripts, etc.
+ 
+ **Execution Modes**:
+ - **Sandbox**: Runs in isolated Docker container (Debian/Alpine)
+ - **Flexible**: Uses Docker if available, falls back to direct
+ - **Direct**: Runs on host (if permitted)
+ 
+ ### 4. Telegram Integration (telegram.rs)
 
 **Purpose**: Manage multiple Telegram bot instances
 
@@ -174,7 +195,10 @@ Telegram Message → teloxide Dispatcher
                 Send response to Telegram
 ```
 
-### 4. Database Layer (database.rs, schema.rs, models.rs)
+                Send response to Telegram
+ ```
+ 
+ ### 5. Database Layer (database.rs, schema.rs, models.rs)
 
 **Purpose**: Persistent storage with Diesel ORM
 
@@ -190,7 +214,9 @@ pub type DbPool = r2d2::Pool<ConnectionManager<SqliteConnection>>;
 
 **Migrations**: Managed via Diesel CLI, auto-run on startup
 
-### 5. Event System (events.rs)
+**Migrations**: Managed via Diesel CLI, auto-run on startup
+ 
+ ### 6. Event System (events.rs)
 
 **Purpose**: Type-safe event definitions for frontend communication
 
@@ -370,7 +396,25 @@ RUST_LOG=info    # Logging level
 
 - Tauri provides process isolation
 - File operations restricted to app data directory
-- Network requests go through system proxy
+- File operations restricted to app data directory
+ - Network requests go through system proxy
+ 
+ ### Docker Sandbox (New)
+ 
+ **Purpose**: Safe execution of untrusted code (Skills, Bash)
+ 
+ **Features**:
+ - **Isolation**: Runs code in `debian:stable-slim` or `alpine` containers
+ - **Resource Limits**: Configurable RAM/CPU limits (e.g., 256MB RAM)
+ - **Network**: Optional network access
+ - **Mounts**: Workspace mounted as R/W, Skill files as R/O
+ 
+ **Enforcement**:
+ - Agents can enforce "Sandbox Mode" globally via `execution_settings`
+ - Skills can require "Sandbox Mode" in `skill.yaml`
+ - If Sandbox is required but Docker is missing, execution is blocked
+ 
+ ### API Key Management
 
 ### API Key Management
 

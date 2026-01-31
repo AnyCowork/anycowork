@@ -29,6 +29,8 @@ pub struct Agent {
     pub updated_at: i64,
     pub platform_configs: Option<String>,
     pub execution_settings: Option<String>,
+    pub scope_type: Option<String>,
+    pub workspace_path: Option<String>,
 }
 
 #[derive(Insertable, Deserialize)]
@@ -57,6 +59,8 @@ pub struct NewAgent {
     pub updated_at: i64,
     pub platform_configs: Option<String>,
     pub execution_settings: Option<String>,
+    pub scope_type: Option<String>,
+    pub workspace_path: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]

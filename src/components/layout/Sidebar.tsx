@@ -54,12 +54,12 @@ export function Sidebar() {
   return (
     <div
       className={cn(
-        "flex h-full flex-col border-r bg-muted transition-all duration-300 ease-in-out",
+        "flex h-full flex-col border-r border-border/60 bg-muted/70 transition-all duration-300 ease-in-out",
         isCollapsed ? "w-16" : "w-64"
       )}
     >
       {/* Logo & Toggle Header */}
-      <div className={cn("flex h-14 items-center border-b", isCollapsed ? "justify-center px-0" : "px-4 justify-between")}>
+      <div className={cn("flex h-14 items-center border-b border-border/50 bg-background/30", isCollapsed ? "justify-center px-0" : "px-4 justify-between")}>
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80 shrink-0">
             <Sparkles className="h-4 w-4 text-primary-foreground" />
@@ -112,11 +112,11 @@ export function Sidebar() {
               <Link key={item.href} to={item.href}>
                 <div
                   className={cn(
-                    "flex items-center gap-3 rounded-md py-2 text-sm font-medium transition-all duration-200",
+                    "flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-all duration-200",
                     isCollapsed ? "justify-center px-0" : "px-3",
                     isActive
-                      ? "bg-primary/10 text-primary shadow-sm"
-                      : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                      ? "bg-primary/85 text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
                   )}
                   title={isCollapsed ? item.name : undefined}
                 >
@@ -131,7 +131,7 @@ export function Sidebar() {
         {/* Studio */}
         <div className="space-y-1">
           {!isCollapsed && (
-            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider overflow-hidden whitespace-nowrap">
+            <div className="px-2 py-1.5 text-xs font-semibold text-foreground/50 uppercase tracking-wider overflow-hidden whitespace-nowrap">
               Control Center
             </div>
           )}
@@ -143,11 +143,11 @@ export function Sidebar() {
               <Link key={item.href} to={item.href}>
                 <div
                   className={cn(
-                    "flex items-center gap-3 rounded-md py-2 text-sm font-medium transition-all duration-200",
+                    "flex items-center gap-3 rounded-lg py-2 text-sm font-medium transition-all duration-200",
                     isCollapsed ? "justify-center px-0" : "px-3",
                     isActive
-                      ? "bg-primary/10 text-primary shadow-sm"
-                      : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                      ? "bg-primary/15 text-primary shadow-sm"
+                      : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
                   )}
                   title={isCollapsed ? item.name : undefined}
                 >
@@ -161,7 +161,7 @@ export function Sidebar() {
       </nav>
 
       {/* Footer / Settings */}
-      <div className="border-t p-2 space-y-1 bg-muted/5">
+      <div className="border-t border-border/50 p-2 space-y-1 bg-background/20">
         {bottomNavigation.map((item) => {
           const isActive = location.pathname === item.href;
 
@@ -169,11 +169,11 @@ export function Sidebar() {
             <Link key={item.href} to={item.href}>
               <div
                 className={cn(
-                  "flex items-center gap-3 rounded-md py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-lg py-2 text-sm font-medium transition-colors",
                   isCollapsed ? "justify-center px-0" : "px-3",
                   isActive
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
                 )}
                 title={isCollapsed ? item.name : undefined}
               >
@@ -185,7 +185,7 @@ export function Sidebar() {
         })}
         {!isCollapsed && (
           <div className="pt-2 px-3 pb-1">
-            <p className="text-[10px] text-muted-foreground/50 font-mono">
+            <p className="text-[10px] text-foreground/30 font-mono">
               v0.1.0-alpha
             </p>
           </div>

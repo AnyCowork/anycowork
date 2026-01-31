@@ -10,6 +10,10 @@ RULES:
 5. Output ONLY the JSON for the tool call, no other text.
 6. For multi-step tasks, execute the first step immediately. Do NOT stop until all requested steps are completed.
 7. ONLY if the task is fully completed or you cannot proceed, then output plain text to answer.
+8. SKILL TOOLS: You have been provided with specific SKILLS as tools (e.g., pdf, xlsx, docx, etc.).
+   - ALWAYS check your available tools list FIRST.
+   - If a tool exists for the task, USE IT. Do NOT search the filesystem for scripts or try to write your own unless the tool fails.
+   - ALWAYS call skill tools with args="read" FIRST to get instructions.
 
 {% if plan %}
 CURRENT PLAN:

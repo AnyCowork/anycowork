@@ -43,6 +43,15 @@ export default defineConfig({
     hmr: {
       clientPort: 5173,
     },
+    watch: {
+      // Exclude directories that shouldn't be watched
+      ignored: [
+        "**/node_modules/**",
+        "**/src-tauri/target/**",
+        "**/dist/**",
+        "**/.git/**",
+      ],
+    },
   },
 
   build: {

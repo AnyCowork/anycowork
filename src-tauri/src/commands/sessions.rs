@@ -289,6 +289,8 @@ mod tests {
             updated_at: 0,
             platform_configs: None,
             execution_settings: None,
+            scope_type: None,
+            workspace_path: None,
         };
 
         diesel::insert_into(agents::table)

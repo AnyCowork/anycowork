@@ -11,6 +11,7 @@
     "title": "Core Concepts"
   },
   "agents": "Agents & Coworkers",
+  "skills": "Skills & Sandbox",
   "mcp": "Model Context Protocol",
   "Architecture": {
     "type": "separator",

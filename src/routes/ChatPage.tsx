@@ -38,7 +38,17 @@ import {
   Brain,
   ChevronLeft,
   ChevronRight,
+  Settings,
+  FolderOpen,
+  ArrowDown,
+  Search,
+  Copy,
+  RotateCw,
+  Keyboard,
+  StopCircle,
+  Edit2,
 } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { listen } from '@tauri-apps/api/event';
@@ -52,11 +62,11 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 // Available AI models (✅ = Tested and verified working)
 const AI_MODELS = [
   // Gemini 3 Series (Latest - Most Intelligent)
-  { value: "gemini-3-pro-preview", label: "Gemini 3 Pro ⭐", provider: "gemini" },
+  { value: "gemini-3-pro-preview", label: "Gemini 3 Pro", provider: "gemini" },
   { value: "gemini-3-flash-preview", label: "Gemini 3 Flash", provider: "gemini" },
 
   // Gemini 2.0 Series (Latest)
-  { value: "gemini-2.0-flash-exp", label: "Gemini 2.0 Flash Exp ⭐", provider: "gemini" },
+  { value: "gemini-2.0-flash-exp", label: "Gemini 2.0 Flash Exp", provider: "gemini" },
   { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash", provider: "gemini" },
 
   // Gemini 1.5 Series (Stable)
@@ -64,13 +74,13 @@ const AI_MODELS = [
   { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash", provider: "gemini" },
 
   // Claude Models (Opus 4.5 default, Haiku tested ✅)
-  { value: "claude-opus-4.5", label: "Claude Opus 4.5 ⭐", provider: "anthropic" },
+  { value: "claude-opus-4.5", label: "Claude Opus 4.5", provider: "anthropic" },
   { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet", provider: "anthropic" },
   { value: "claude-3-opus-20240229", label: "Claude 3 Opus", provider: "anthropic" },
   { value: "claude-3-haiku-20240307", label: "Claude 3 Haiku", provider: "anthropic" },
 
   // OpenAI Models (GPT-5 default, GPT-4 tested ✅)
-  { value: "gpt-5", label: "GPT-5 ⭐", provider: "openai" },
+  { value: "gpt-5", label: "GPT-5", provider: "openai" },
   { value: "gpt-5.2", label: "GPT-5.2", provider: "openai" },
   { value: "gpt-5-mini", label: "GPT-5 Mini", provider: "openai" },
   { value: "gpt-4o", label: "GPT-4o", provider: "openai" },
@@ -192,9 +202,19 @@ export default function ChatPage() {
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<string>("");
 
+  // UI State
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [isTaskListOpen, setIsTaskListOpen] = useState(true); // Task list panel state
+  const [currentWorkingDirectory, setCurrentWorkingDirectory] = useState<string>("");
+
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const approvalBarRef = useRef<HTMLDivElement>(null);
 
   // Derived State
   const currentSession = React.useMemo(() => {
@@ -224,6 +244,13 @@ export default function ChatPage() {
     }
   }, [agents, selectedAgentId]);
 
+  // Fetch current working directory on mount
+  useEffect(() => {
+    anycoworkApi.getCurrentWorkingDirectory()
+      .then(setCurrentWorkingDirectory)
+      .catch(err => console.error("Failed to get current working directory:", err));
+  }, []);
+
   // Sync model with active agent
   useEffect(() => {
     if (activeAgent?.ai_config?.model) {
@@ -233,9 +260,33 @@ export default function ChatPage() {
     }
   }, [activeAgent]);
 
+  // Scroll management
   useEffect(() => {
+    if (isAtBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isAtBottom]);
+
+  // Detect scroll position
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const atBottom = scrollHeight - scrollTop - clientHeight < 100;
+      setIsAtBottom(atBottom);
+      setShowScrollButton(!atBottom && messages.length > 5);
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [messages.length]);
+
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    setIsAtBottom(true);
+  };
 
   // Load chat history when session changes
   useEffect(() => {
@@ -508,6 +559,20 @@ export default function ChatPage() {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const ctrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
 
+      // Ctrl/Cmd + K: Show keyboard shortcuts
+      if (ctrlOrCmd && e.key === 'k') {
+        e.preventDefault();
+        setShowKeyboardShortcuts(true);
+        return;
+      }
+
+      // Ctrl/Cmd + F: Search in conversation
+      if (ctrlOrCmd && e.key === 'f') {
+        e.preventDefault();
+        // Focus search input (we'll add this)
+        return;
+      }
+
       // Ctrl/Cmd + T: New chat
       if (ctrlOrCmd && e.key === 't') {
         e.preventDefault();
@@ -544,11 +609,17 @@ export default function ChatPage() {
         }
         return;
       }
+
+      // Escape: Close keyboard shortcuts dialog
+      if (e.key === 'Escape' && showKeyboardShortcuts) {
+        setShowKeyboardShortcuts(false);
+        return;
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab, openTabs]);
+  }, [activeTab, openTabs, showKeyboardShortcuts]);
 
   // Tab Management: Open tab function
   const openTab = (sessionIdToOpen: string) => {
@@ -630,7 +701,7 @@ export default function ChatPage() {
           // Navigate to the new session
           navigate(`/chat/${newSession.id}`, { replace: true });
           // Send message immediately with the new session ID
-          await sendMessage(messageContent, undefined, false, newSession.id, executionMode);
+          await sendMessage(messageContent, undefined, false, newSession.id, executionMode, selectedModel);
         },
         onError: (error) => {
           console.error("Failed to create session:", error);
@@ -638,7 +709,7 @@ export default function ChatPage() {
         }
       });
     } else {
-      await sendMessage(messageContent, undefined, false, sessionId, executionMode);
+      await sendMessage(messageContent, undefined, false, sessionId, executionMode, selectedModel);
     }
   };
 
@@ -647,18 +718,25 @@ export default function ChatPage() {
   const [reasoning, setReasoning] = useState<string>("");
   const [isReasoningOpen, setIsReasoningOpen] = useState(false);
 
-  // Auto-expand reasoning when it starts
-  useEffect(() => {
-    if (reasoning && !isReasoningOpen && thinkingMessage === "Thinking...") {
-      setIsReasoningOpen(true);
-    }
-  }, [reasoning, thinkingMessage]);
-
   // State for execution job tracking
   const [currentJob, setCurrentJob] = useState<ExecutionJob | null>(null);
   const [pendingApproval, setPendingApproval] = useState<ExecutionStep | null>(null);
   const [activePlan, setActivePlan] = useState<PlanState | null>(null);
   const [isPlanOpen, setIsPlanOpen] = useState(true);
+
+  // Auto-expand task list when tasks start running
+  useEffect(() => {
+    if (activePlan && activePlan.tasks.some(t => t.status === 'running')) {
+      setIsTaskListOpen(true);
+    }
+  }, [activePlan]);
+
+  // Scroll to approval bar when it appears
+  useEffect(() => {
+    if (pendingApproval && approvalBarRef.current) {
+      approvalBarRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [pendingApproval]);
 
   // Listen for Tauri events
   useEffect(() => {
@@ -950,7 +1028,7 @@ export default function ChatPage() {
     };
   }, [sessionId]);
 
-  const sendMessage = async (messageContent: string, actionContext?: any, skipUserMessage?: boolean, explicitSessionId?: string, executionMode?: string) => {
+  const sendMessage = async (messageContent: string, actionContext?: any, skipUserMessage?: boolean, explicitSessionId?: string, executionMode?: string, modelOverride?: string) => {
     const targetSessionId = explicitSessionId || sessionId;
     if (!messageContent || !targetSessionId) return;
 
@@ -985,7 +1063,7 @@ export default function ChatPage() {
 
     try {
       // This returns "started"
-      await anycoworkApi.sendMessage(targetSessionId, messageContent);
+      await anycoworkApi.sendMessage(targetSessionId, messageContent, executionMode, modelOverride);
 
     } catch (error) {
       console.error("Error sending message:", error);
@@ -1269,7 +1347,7 @@ export default function ChatPage() {
       <ConfirmDialog />
       <div className="flex flex-col h-full overflow-hidden">
         {/* Tab Bar */}
-        <div className="border-b bg-background/50 backdrop-blur-sm px-2 py-1.5 flex items-center gap-2">
+        <div className="border-b border-border/60 bg-muted/50 px-2 py-1.5 flex items-center gap-2">
           <Tabs value={activeTab} className="flex-1 overflow-hidden">
             <div className="flex items-center gap-2">
               <Popover>
@@ -1277,7 +1355,7 @@ export default function ChatPage() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-8 w-8 shrink-0 hover:bg-muted/50 text-muted-foreground transition-colors rounded-lg"
+                    className="h-8 w-8 shrink-0 hover:bg-background/80 text-muted-foreground hover:text-foreground transition-colors rounded-lg"
                     title="History"
                   >
                     <Clock className="h-4 w-4" />
@@ -1323,30 +1401,29 @@ export default function ChatPage() {
                 onClick={handleNewChat}
                 size="sm"
                 variant="ghost"
-                className="h-8 px-4 gap-2 shrink-0 bg-muted/30 hover:bg-muted text-muted-foreground hover:text-foreground transition-all rounded-t-lg rounded-b-none border-b border-transparent min-w-[100px] justify-start"
+                className="h-8 px-3 gap-2 shrink-0 bg-primary/10 hover:bg-primary/20 text-primary hover:text-primary transition-all rounded-lg border border-primary/20"
               >
                 <Plus className="h-4 w-4" />
-                <span className="text-sm font-medium">New Chat</span>
+                <span className="text-sm font-medium">New</span>
               </Button>
 
-              <div className="w-[1px] h-4 bg-border/50 mx-1" /> {/* Divider */}
+              <div className="w-[1px] h-5 bg-border/60 mx-1" /> {/* Divider */}
 
-              <div className="flex-1 overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden -mb-px">
-                <TabsList className="h-9 bg-transparent p-0 gap-1 inline-flex items-end">
+              <div className="flex-1 overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden">
+                <TabsList className="h-9 bg-transparent p-0 gap-1 inline-flex items-center">
                   {openTabs.map(tabId => (
                     <TabsTrigger
                       key={tabId}
                       value={tabId}
                       onClick={() => openTab(tabId)}
                       className={cn(
-                        "group relative h-8 px-3 py-1.5 text-xs font-medium rounded-t-lg rounded-b-none border border-transparent transition-all duration-200",
+                        "group relative h-7 px-3 py-1 text-xs font-medium rounded-md border transition-all duration-200",
                         // Inactive state
-                        "hover:bg-muted/50 text-muted-foreground hover:text-foreground",
-                        // Active State styling (Seamless Chrome-like)
+                        "border-transparent hover:bg-background/80 text-muted-foreground hover:text-foreground",
+                        // Active State styling
                         "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:font-semibold",
-                        "data-[state=active]:border-border data-[state=active]:border-b-transparent",
-                        "data-[state=active]:shadow-none data-[state=active]:z-10",
-                        "min-w-[120px] max-w-[200px]",
+                        "data-[state=active]:border-border data-[state=active]:shadow-sm",
+                        "min-w-[100px] max-w-[180px]",
                         "flex items-center gap-2 justify-between"
                       )}
                     >
@@ -1354,7 +1431,7 @@ export default function ChatPage() {
                       <div
                         role="button"
                         tabIndex={0}
-                        className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-opacity shrink-0 inline-flex items-center justify-center rounded-md"
+                        className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100 hover:bg-destructive/20 hover:text-destructive transition-all shrink-0 inline-flex items-center justify-center rounded"
                         onClick={(e) => closeTab(e, tabId)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
@@ -1375,10 +1452,56 @@ export default function ChatPage() {
         </div>
 
         <div className="flex-1 flex flex-row overflow-hidden relative">
+          {/* Sticky Approval Notification Bar */}
+          {pendingApproval && (
+            <div
+              ref={approvalBarRef}
+              className="absolute top-0 left-0 right-0 z-10 bg-amber-50 dark:bg-amber-950/90 border-b border-amber-200 dark:border-amber-800 shadow-md animate-in slide-in-from-top-2 duration-300"
+            >
+              <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 animate-pulse" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                      Approval Required
+                    </p>
+                    <p className="text-xs text-amber-700 dark:text-amber-300 truncate">
+                      {pendingApproval.tool_name === "filesystem" ? "📁 Filesystem access" :
+                        pendingApproval.tool_name === "bash" ? "⚡ Command execution" :
+                          `🔧 ${pendingApproval.tool_name}`}
+                      {pendingApproval.tool_args.command && `: ${pendingApproval.tool_args.command.substring(0, 40)}...`}
+                      {pendingApproval.tool_args.path && `: ${pendingApproval.tool_args.path}`}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleReject}
+                    className="gap-1 h-8 px-3 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:border-red-900 dark:hover:bg-red-950"
+                  >
+                    <XCircle className="h-3.5 w-3.5" /> Deny
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleApprove}
+                    className="gap-1 bg-green-600 hover:bg-green-700 text-white h-8 px-3 shadow-sm"
+                  >
+                    <CheckCircle className="h-3.5 w-3.5" /> Approve
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Chat Area */}
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className={cn(
+              "flex-1 overflow-y-auto p-6 space-y-6",
+              pendingApproval && "pt-20" // Add padding when approval bar is visible
+            )} ref={messagesContainerRef}>
               {(!sessionId || sessionId === 'new') ? (
                 <div className="h-full flex flex-col items-center justify-center text-center space-y-6 max-w-2xl mx-auto">
                   <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/80">
@@ -1416,12 +1539,12 @@ export default function ChatPage() {
                 >
                   {/* Hide avatar for system/thinking messages */}
                   {message.role !== "system" && message.message_type !== "thinking" && (
-                    <Avatar className="h-8 w-8 shrink-0">
+                    <Avatar className="h-8 w-8 shrink-0 border border-border/50">
                       <AvatarFallback
                         className={cn(
                           message.role === "user"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted"
+                            ? "bg-secondary text-foreground"
+                            : "bg-muted text-muted-foreground"
                         )}
                       >
                         {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
@@ -1441,10 +1564,10 @@ export default function ChatPage() {
                         message.role === "system" || message.message_type === "thinking"
                           ? message.step
                             ? "" // No background wrapper for tool execution messages
-                            : "px-3 py-1.5 text-xs text-muted-foreground bg-muted/40 border border-border/30 rounded-lg shadow-sm"
+                            : "px-3 py-1.5 text-xs text-muted-foreground bg-muted/50 border border-border/40 rounded-lg"
                           : message.role === "user"
-                            ? "px-4 py-3 bg-accent text-accent-foreground border border-accent-foreground/10 rounded-2xl rounded-br-md break-words shadow-sm"
-                            : "px-4 py-3 bg-secondary text-secondary-foreground border border-border/50 rounded-2xl rounded-bl-md max-w-full overflow-hidden break-words shadow-sm"
+                            ? "px-4 py-3 bg-secondary/80 text-foreground rounded-2xl rounded-br-sm break-words border border-border/30"
+                            : "px-4 py-3 bg-background text-foreground rounded-2xl rounded-bl-sm max-w-full overflow-hidden break-words border border-border/50"
                       )}
                     >
                       {/* Show text content only if:
@@ -1587,22 +1710,19 @@ export default function ChatPage() {
                           (message.content.trim() && message.content.length < 200)
                         ) && (
                           <ReactMarkdown
-                            className={cn(
-                              "prose dark:prose-invert max-w-none text-sm break-words",
-                              message.role === "user" ? "prose-p:text-accent-foreground" : "prose-p:text-secondary-foreground"
-                            )}
+                            className="prose dark:prose-invert max-w-none text-sm break-words prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground"
                             remarkPlugins={[remarkGfm]}
                             components={{
                               pre: ({ node, ...props }) => (
-                                <div className="overflow-x-auto w-full my-2 rounded-lg bg-black/10 dark:bg-black/30 p-2">
+                                <div className="overflow-x-auto w-full my-2 rounded-lg p-3 bg-muted/60 border border-border/30">
                                   <pre className="whitespace-pre-wrap break-words text-xs" {...props} />
                                 </div>
                               ),
                               code: ({ node, inline, ...props }: any) =>
                                 inline ? (
-                                  <code className="bg-black/10 dark:bg-black/30 rounded px-1 py-0.5 text-xs break-all" {...props} />
+                                  <code className="rounded px-1.5 py-0.5 text-xs break-all font-mono bg-muted/80 border border-border/30" {...props} />
                                 ) : (
-                                  <code className="block whitespace-pre-wrap break-words text-xs" {...props} />
+                                  <code className="block whitespace-pre-wrap break-words text-xs font-mono" {...props} />
                                 )
                             }}
                           >
@@ -1753,118 +1873,209 @@ export default function ChatPage() {
                   </div>
                 </div>
               )}
+
+              {/* Task list moved to input area - removed from message stream */}
+
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Area - Redesigned with inline mode and model selection */}
-            <div className="p-4 bg-background/95 backdrop-blur border-t supports-[backdrop-filter]:bg-background/60">
-              <form onSubmit={handleSubmit} className="mx-auto max-w-3xl">
-                {/* Main input with send button */}
-                <div className="relative">
-                  <Textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSubmit(e);
-                      }
-                    }}
-                    placeholder="Ask anything (Ctrl+L), @ to mention, / for workflows"
-                    className="min-h-[80px] max-h-[200px] resize-none pr-12 pb-12 rounded-xl border-muted-foreground/20"
-                    disabled={isLoading}
-                    data-testid="chat-input"
-                  />
-                  <Button
-                    type="submit"
-                    size="icon"
-                    disabled={!input.trim() || isLoading}
-                    className="absolute bottom-3 right-3 h-9 w-9 rounded-lg"
-                  >
-                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  </Button>
-                </div>
+            {/* Input Area - Enhanced with task list integration */}
+            <div className="border-t border-border/60 bg-muted/30">
+              <div className="mx-auto max-w-3xl">
+                {/* Task List Panel - Collapsible, above input */}
+                {activePlan && activePlan.tasks.length > 0 && (
+                  <div className="border-b border-border/40">
+                    <button
+                      type="button"
+                      onClick={() => setIsTaskListOpen(!isTaskListOpen)}
+                      className="w-full flex items-center justify-between px-4 py-2 hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <ListTodo className={cn(
+                          "h-4 w-4 transition-colors",
+                          activePlan.tasks.some(t => t.status === 'running') ? "text-primary animate-pulse" : "text-muted-foreground"
+                        )} />
+                        <span className="text-sm font-medium">Task Plan</span>
+                        <Badge variant="outline" className="text-xs h-5">
+                          {activePlan.tasks.filter(t => t.status === 'completed').length}/{activePlan.tasks.length}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {activePlan.tasks.filter(t => t.status === 'running').length > 0 ? '• In Progress' :
+                            activePlan.tasks.every(t => t.status === 'completed') ? '• Completed' : '• Pending'}
+                        </span>
+                      </div>
+                      <ChevronRight className={cn(
+                        "h-4 w-4 text-muted-foreground transition-transform duration-200",
+                        isTaskListOpen && "rotate-90"
+                      )} />
+                    </button>
 
-                {/* Mode and Model Selection - Inline at bottom of input */}
-                <div className="flex items-center gap-2 mt-2 px-1">
-                  {/* Mode Selector */}
-                  <div className="flex items-center gap-1">
+                    {isTaskListOpen && (
+                      <div className="px-4 pb-3 space-y-1.5 max-h-[200px] overflow-y-auto animate-in slide-in-from-top-2 duration-200">
+                        {activePlan.tasks.map((task, idx) => (
+                          <div
+                            key={task.id || idx}
+                            className={cn(
+                              "flex items-start gap-2.5 p-2 rounded-md transition-all duration-200",
+                              task.status === 'running' && "bg-primary/10 border border-primary/20",
+                              task.status === 'completed' && "bg-green-500/5 opacity-70",
+                              task.status === 'failed' && "bg-red-500/10 border border-red-500/20",
+                              task.status === 'pending' && "bg-muted/30"
+                            )}
+                          >
+                            <div className="mt-0.5 flex-shrink-0">
+                              {task.status === 'completed' ? (
+                                <CheckCircle className="w-4 h-4 text-green-600" />
+                              ) : task.status === 'failed' ? (
+                                <XCircle className="w-4 h-4 text-red-600" />
+                              ) : task.status === 'running' ? (
+                                <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                              ) : (
+                                <Clock className="w-4 h-4 text-muted-foreground/50" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={cn(
+                                "text-xs leading-relaxed",
+                                task.status === 'completed' && "line-through text-muted-foreground"
+                              )}>
+                                {task.description}
+                              </p>
+                              {task.result && task.status === 'completed' && (
+                                <p className="text-[10px] text-muted-foreground/60 mt-1 truncate">
+                                  ✓ {task.result}
+                                </p>
+                              )}
+                            </div>
+                            <Badge
+                              variant={task.status === 'completed' ? 'secondary' : task.status === 'running' ? 'default' : 'outline'}
+                              className="text-[10px] h-5 px-1.5 capitalize flex-shrink-0"
+                            >
+                              {task.status === 'running' ? 'active' : task.status}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Main Input Form */}
+                <form onSubmit={handleSubmit} className="p-4">
+                  {/* Textarea with send button */}
+                  <div className="relative">
+                    <Textarea
+                      ref={textareaRef}
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSubmit(e);
+                        }
+                      }}
+                      placeholder={
+                        isLoading
+                          ? "Agent is thinking..."
+                          : activePlan && activePlan.tasks.some(t => t.status === 'running')
+                            ? "Task in progress..."
+                            : "Ask anything... (Enter to send, Shift+Enter for new line)"
+                      }
+                      className="min-h-[80px] max-h-[200px] resize-none pr-14 pb-3 rounded-xl border-border bg-background shadow-sm focus:border-primary/50 focus:ring-1 focus:ring-primary/20 placeholder:text-muted-foreground/60 transition-all"
+                      disabled={isLoading}
+                      data-testid="chat-input"
+                    />
+                    <Button
+                      type="submit"
+                      size="icon"
+                      disabled={!input.trim() || isLoading}
+                      className={cn(
+                        "absolute bottom-3 right-3 h-10 w-10 rounded-lg shadow-md transition-all",
+                        !input.trim() || isLoading ? "opacity-50" : "hover:scale-105"
+                      )}
+                    >
+                      {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    </Button>
+                  </div>
+
+                  {/* Controls Bar - Mode, Model, Agent */}
+                  <div className="flex items-center gap-2 mt-3 px-1">
+                    {/* Mode Toggle */}
                     <button
                       type="button"
                       onClick={() => setExecutionMode(executionMode === "planning" ? "fast" : "planning")}
                       className={cn(
-                        "group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all",
-                        "hover:bg-muted border border-transparent",
+                        "group flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all",
+                        "border hover:shadow-sm",
                         executionMode === "planning"
-                          ? "bg-muted/60 text-foreground"
-                          : "text-muted-foreground hover:text-foreground"
+                          ? "bg-primary/10 border-primary/30 text-primary"
+                          : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-primary/20"
                       )}
+                      title={executionMode === "planning" ? "Planning mode: Creates task plan before execution" : "Fast mode: Direct execution without planning"}
                     >
-                      <div className={cn(
-                        "transition-transform",
-                        executionMode === "planning" ? "" : "rotate-90"
-                      )}>
-                        {executionMode === "planning" ? (
-                          <ListTodo className="h-3.5 w-3.5" />
-                        ) : (
-                          <Zap className="h-3.5 w-3.5" />
-                        )}
-                      </div>
+                      {executionMode === "planning" ? (
+                        <ListTodo className="h-3.5 w-3.5" />
+                      ) : (
+                        <Zap className="h-3.5 w-3.5" />
+                      )}
                       <span className="capitalize">{executionMode}</span>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50">
-                        <polyline points="6 9 12 15 18 9"></polyline>
-                      </svg>
                     </button>
-                  </div>
 
-                  {/* Model Selector */}
-                  <Select value={selectedModel} onValueChange={setSelectedModel}>
-                    <SelectTrigger className={cn(
-                      "h-8 w-auto gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium",
-                      "border-transparent hover:bg-muted bg-muted/60",
-                      "focus:ring-0 shadow-none"
-                    )}>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-muted-foreground text-xs">
-                          {selectedModelInfo?.provider === 'gemini' ? '✨' :
-                            selectedModelInfo?.provider === 'anthropic' ? '🤖' : '🧠'}
-                        </span>
-                        <SelectValue placeholder="Select Model" />
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent align="start" className="max-h-80">
-                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-                        AI Models
-                      </div>
-                      {AI_MODELS.map((model) => (
-                        <SelectItem key={model.value} value={model.value} className="text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="opacity-60">
-                              {model.provider === 'gemini' ? '✨' :
-                                model.provider === 'anthropic' ? '🤖' : '🧠'}
-                            </span>
-                            {model.label}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    {/* Model Selector */}
+                    <Select value={selectedModel} onValueChange={setSelectedModel}>
+                      <SelectTrigger className={cn(
+                        "h-8 w-auto gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium",
+                        "border-border hover:bg-background/80 bg-background shadow-sm hover:shadow",
+                        "focus:ring-1 focus:ring-primary/20 transition-all"
+                      )}>
+                        <div className="flex items-center gap-1.5">
+                          <SelectValue placeholder="Select Model" />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent align="start" className="max-h-80">
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-b">
+                          AI Models
+                        </div>
+                        {AI_MODELS.map((model) => (
+                          <SelectItem key={model.value} value={model.value} className="text-xs">
+                            <div className="flex items-center gap-2">
+                              <span>
+                                {model.provider === 'gemini' ? '✨' :
+                                  model.provider === 'anthropic' ? '🤖' : '🧠'}
+                              </span>
+                              {model.label}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
 
-                  {/* Agent Info - Right aligned */}
-                  <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Bot className="h-3 w-3" />
-                    <span className="max-w-[150px] truncate">
-                      {activeAgent?.name || 'Default Agent'}
-                    </span>
+                    {/* Divider */}
+                    <div className="h-5 w-px bg-border/60 mx-1" />
+
+                    {/* Agent Info */}
+                    <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground bg-background/50 px-2.5 py-1.5 rounded-lg border border-border/50 hover:border-border transition-colors">
+                      <Bot className="h-3.5 w-3.5" />
+                      <span className="max-w-[150px] truncate font-medium">
+                        {activeAgent?.name || 'Default Agent'}
+                      </span>
+                    </div>
+
+                    {/* Status Indicator */}
+                    {(isLoading || (activePlan && activePlan.tasks.some(t => t.status === 'running'))) && (
+                      <div className="flex items-center gap-1.5 text-xs text-primary bg-primary/10 px-2.5 py-1.5 rounded-lg border border-primary/20 animate-in fade-in slide-in-from-right-2 duration-200">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <span className="font-medium">Working...</span>
+                      </div>
+                    )}
                   </div>
-                </div>
-              </form>
+                </form>
+              </div>
             </div>
           </div>
 
-          {/* Right Sidebar: Plan / Context */}
-          {activePlan && (
+          {/* Right Sidebar: Agent Settings Only */}
+          {activeAgent && (
             <div className={cn(
               "border-l border-border bg-card transition-all duration-300 flex flex-col h-full",
               isPlanOpen ? "w-80 p-4" : "w-12 py-4 items-center"
@@ -1872,40 +2083,102 @@ export default function ChatPage() {
               <div className="flex items-center justify-between mb-4">
                 {isPlanOpen && (
                   <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <Clock className="w-4 h-4" /> Agent Plan
+                    <Settings className="w-4 h-4" /> Agent Config
                   </h3>
                 )}
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsPlanOpen(!isPlanOpen)}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={() => setIsPlanOpen(!isPlanOpen)}
+                  title={isPlanOpen ? "Collapse sidebar" : "Expand sidebar"}
+                >
                   {isPlanOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
                 </Button>
               </div>
 
               {isPlanOpen && (
-                <div className="flex flex-col gap-2 overflow-y-auto">
-                  {activePlan.tasks.map((task, idx) => (
-                    <div key={task.id || idx} className={cn(
-                      "p-3 rounded-lg border text-sm",
-                      task.status === 'running' ? "bg-accent border-accent animate-pulse" :
-                        task.status === 'completed' ? "bg-green-500/10 border-green-500/20" :
-                          task.status === 'failed' ? "bg-red-500/10 border-red-500/20" :
-                            "bg-background/50 border-border opacity-70"
-                    )}>
-                      <div className="flex items-start gap-2">
-                        <div className="mt-0.5">
-                          {task.status === 'completed' ? <CheckCircle className="w-4 h-4 text-green-500" /> :
-                            task.status === 'failed' ? <XCircle className="w-4 h-4 text-red-500" /> :
-                              task.status === 'running' ? <Loader2 className="w-4 h-4 text-primary animate-spin" /> :
-                                <div className="w-4 h-4 rounded-full border-2 border-muted" />}
+                <div className="flex flex-col gap-4 overflow-y-auto">
+                  {/* Agent Config Section */}
+                  {activeAgent && (
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                        <Bot className="w-3 h-3" /> Agent Settings
+                      </h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                          <span className="text-muted-foreground">Model</span>
+                          <span className="font-mono text-xs">{activeAgent.ai_config?.model || "N/A"}</span>
                         </div>
-                        <div className="flex-1 space-y-1">
-                          <p className={cn("font-medium leading-none", task.status === 'completed' && "line-through text-muted-foreground")}>
-                            {task.description}
-                          </p>
-                          <span className="text-xs text-muted-foreground capitalize">{task.status}</span>
+                        <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                          <span className="text-muted-foreground">Approval Mode</span>
+                          <span className={cn(
+                            "text-xs font-medium px-2 py-0.5 rounded",
+                            (activeAgent as any).execution_settings?.mode === "autopilot" ? "bg-yellow-500/20 text-yellow-600" :
+                              (activeAgent as any).execution_settings?.mode === "smart_approval" ? "bg-blue-500/20 text-blue-600" :
+                                "bg-green-500/20 text-green-600"
+                          )}>
+                            {(activeAgent as any).execution_settings?.mode === "autopilot" ? "Autopilot" :
+                              (activeAgent as any).execution_settings?.mode === "smart_approval" ? "Smart" : "Manual"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                          <span className="text-muted-foreground">Sandbox Mode</span>
+                          <span className={cn(
+                            "text-xs font-medium px-2 py-0.5 rounded",
+                            (activeAgent as any).execution_settings?.sandbox_mode === "sandbox" ? "bg-green-500/20 text-green-600" :
+                              (activeAgent as any).execution_settings?.sandbox_mode === "direct" ? "bg-red-500/20 text-red-600" :
+                                "bg-blue-500/20 text-blue-600"
+                          )}>
+                            {(activeAgent as any).execution_settings?.sandbox_mode === "sandbox" ? "Sandbox" :
+                              (activeAgent as any).execution_settings?.sandbox_mode === "direct" ? "Direct" : "Flexible"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                          <span className="text-muted-foreground">Workflow</span>
+                          <span className={cn(
+                            "text-xs font-medium px-2 py-0.5 rounded",
+                            executionMode === "fast" ? "bg-yellow-500/20 text-yellow-600" : "bg-blue-500/20 text-blue-600"
+                          )}>
+                            {executionMode === "fast" ? "Fast" : "Planning"}
+                          </span>
                         </div>
                       </div>
                     </div>
-                  ))}
+                  )}
+
+                  {/* Workspace Section */}
+                  {activeAgent && (
+                    <>
+                      <Separator />
+                      <div className="space-y-3">
+                        <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                          <FolderOpen className="w-3 h-3" /> Workspace
+                        </h4>
+                        <div className="p-2 bg-muted/50 rounded text-sm space-y-1">
+                          <p className="text-xs text-muted-foreground">Absolute Path:</p>
+                          <code className="font-mono text-xs break-all block bg-background/50 p-1.5 rounded border">
+                            {(activeAgent as any).workspace_path ||
+                              (activeAgent as any).working_directories?.[0] ||
+                              currentWorkingDirectory ||
+                              "(Loading...)"}
+                          </code>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>Scope:</span>
+                          <span className={cn(
+                            "px-2 py-0.5 rounded font-medium",
+                            (activeAgent as any).scope_type === "global" ? "bg-yellow-500/20 text-yellow-600" : "bg-blue-500/20 text-blue-600"
+                          )}>
+                            {(activeAgent as any).scope_type === "global" ? "Global (Full Access)" : "Workspace Only"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground/70">
+                          Agent can only access files within this directory.
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>

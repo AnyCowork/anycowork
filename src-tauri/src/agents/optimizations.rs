@@ -232,8 +232,12 @@ pub fn smart_truncate(text: &str, max_chars: usize) -> String {
     let actual_keep_start = keep_start.min(max_chars - keep_end - 100); // 100 for truncation message
     let actual_keep_end = keep_end.min(max_chars - actual_keep_start - 100);
 
+    // Ensure valid char boundaries
+    let actual_keep_start = text.floor_char_boundary(actual_keep_start);
+    let suffix_start = text.ceil_char_boundary(text.len() - actual_keep_end);
+
     let start_part = &text[..actual_keep_start];
-    let end_part = &text[text.len() - actual_keep_end..];
+    let end_part = &text[suffix_start..];
 
     format!(
         "{}...\n\n[TRUNCATED {} characters ({} tokens)]\n\n...{}",
@@ -363,29 +367,18 @@ mod tests {
     #[test]
     fn test_trim_history() {
         let mut history = vec![
-            rig::completion::Message {
-                role: "user".to_string(),
-                content: "msg1".to_string(),
-            },
-            rig::completion::Message {
-                role: "assistant".to_string(),
-                content: "msg2".to_string(),
-            },
-            rig::completion::Message {
-                role: "user".to_string(),
-                content: "msg3".to_string(),
-            },
-            rig::completion::Message {
-                role: "assistant".to_string(),
-                content: "msg4".to_string(),
-            },
+            create_user_message("msg1".to_string()),
+            create_assistant_message("msg2".to_string()),
+            create_user_message("msg3".to_string()),
+            create_assistant_message("msg4".to_string()),
         ];
 
         trim_history(&mut history, 2);
 
         assert_eq!(history.len(), 2);
-        assert_eq!(history[0].content, "msg3");
-        assert_eq!(history[1].content, "msg4");
+        // get_message_content uses Debug format: Text(Text { text: "..." })
+        assert!(get_message_content(&history[0]).contains("msg3"));
+        assert!(get_message_content(&history[1]).contains("msg4"));
     }
 
     #[test]
@@ -399,18 +392,9 @@ mod tests {
     #[test]
     fn test_optimize_history_by_tokens() {
         let mut history = vec![
-            rig::completion::Message {
-                role: "user".to_string(),
-                content: "a".repeat(1000),
-            },
-            rig::completion::Message {
-                role: "assistant".to_string(),
-                content: "b".repeat(1000),
-            },
-            rig::completion::Message {
-                role: "user".to_string(),
-                content: "c".repeat(100),
-            },
+            create_user_message("a".repeat(1000)),
+            create_assistant_message("b".repeat(1000)),
+            create_user_message("c".repeat(100)),
         ];
 
         let initial_len = history.len();
@@ -418,7 +402,7 @@ mod tests {
 
         assert!(history.len() < initial_len);
         // Should keep the most recent message
-        assert_eq!(history.last().unwrap().content.chars().next().unwrap(), 'c');
+        assert!(get_message_content(history.last().unwrap()).contains("c"));
     }
 
     #[tokio::test]

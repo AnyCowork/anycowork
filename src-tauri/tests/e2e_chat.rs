@@ -71,6 +71,7 @@ async fn test_e2e_agent_interaction() {
             "Create a file named {} with content 'interaction_verified'",
             test_file_path
         ),
+        None,
     )
     .await;
 

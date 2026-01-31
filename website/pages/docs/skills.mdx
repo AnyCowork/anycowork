@@ -1,0 +1,75 @@
+---
+title: Skills System
+description: Extensible capabilities and safe execution for AnyCowork agents
+---
+
+# Skills System
+
+Skills are the mechanism by which AnyCowork agents gain new capabilities. While "Tools" are low-level primitives (like reading a file or searching text), "Skills" are higher-level bundles of functionality that solve specific user problems.
+
+## What is a Skill?
+
+A Skill in AnyCowork is a package containing:
+
+1.  **Metadata**: Name, description, triggers, and configuration.
+2.  **Implementation**: Scripts (Python, Node.js, Shell) or native commands.
+3.  **Documentation**: Instructions for the AI on how and when to use the skill.
+4.  **Security Config**: Sandbox requirements and permission scopes.
+
+Examples:
+- **PDF Generator**: A skill that takes markdown text and converts it to PDF using a Python script.
+- **Data Analyst**: A skill that uses Python's Pandas library to analyze CSV files.
+- **Git Ops**: A skill to check status, commit, and push code.
+
+## Sandboxing & Security
+
+One of the unique features of AnyCowork is its **Docker-based Sandbox**. This allows agents to execute untrusted code (like Python scripts generated on the fly or downloaded skills) safely without risking your host machine.
+
+### Execution Modes
+
+Skills and Agents can operate in three execution modes:
+
+1.  **Sandbox** (Recommended for most skills)
+    - Code runs inside an isolated Docker container (`debian:stable-slim` or `alpine`).
+    - The container has limited resources (RAM/CPU) and restricted network access (optional).
+    - Your workspace is mounted, but system files are inaccessible.
+    - **Requires**: Docker installed and running on the host.
+
+2.  **Flexible** (Default)
+    - If Docker is available, it uses the Sandbox.
+    - If Docker is missing, it falls back to running on the host, but may warn or fail if the skill *requires* sandbox.
+
+3.  **Direct**
+    - Runs directly on your host machine.
+    - Useful for skills that *need* host access (e.g., managing system services, accessing hardware).
+    - **Security Warning**: Only enable this for trusted skills.
+
+### Enforcing Safety
+
+You can configure an Agent to **force** Sandbox mode via its Execution Settings. In this mode, if Docker is unavailable, the agent will refuse to execute skills rather than falling back to unsafe direct execution.
+
+## Developing Skills
+
+Skills are stored in the `skills/` directory (either bundled with the app or in your user data folder). A typical skill structure looks like this:
+
+```
+my-skill/
+├── skill.yaml       # Definition
+├── README.md        # AI Context & Usage Guide
+└── src/
+    ├── main.py      # Implementation
+    └── requirements.txt
+```
+
+### skill.yaml Example
+
+```yaml
+name: "pdf-generator"
+version: "1.0.0"
+description: "Converts Markdown to PDF using python-markdown and weasyprint."
+execution_mode: "sandbox"
+requires_sandbox: true
+sandbox_config:
+  image: "python:3.11-slim"
+  memory_limit: "512m"
+```

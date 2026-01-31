@@ -25,9 +25,12 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Bot, Plus, Trash2, Edit, Brain, Sparkles, MessageSquare, Server, Wrench, Key, Database, Shield, ShieldCheck, ShieldAlert, CheckCircle2
+  Bot, Plus, Trash2, Edit, Brain, Sparkles, MessageSquare, Server, Wrench, Key, Database, Shield, ShieldCheck, ShieldAlert, CheckCircle2, AlertCircle, Info, Loader2, Box
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -293,6 +296,7 @@ You should:
     api_keys: {},
     execution_settings: {
       mode: "require_approval" as const,
+      sandbox_mode: "flexible" as const, // "sandbox", "direct", or "flexible"
       whitelisted_commands: [
         "^ls(\\s|$)",
         "^pwd$",
@@ -322,7 +326,7 @@ You should:
         ...agent,
         ai_config: {
           provider: agent.ai_config?.provider || "gemini",
-          model: agent.ai_config?.model || "gemini-3-pro-preview",
+          model: agent.ai_config?.model || "gemini-3-flash-preview",
           temperature: agent.ai_config?.temperature ?? 0.7,
           max_tokens: agent.ai_config?.max_tokens ?? 4096,
         },
@@ -338,7 +342,7 @@ You should:
         ...agent,
         ai_config: {
           provider: agent.ai_config?.provider || "gemini",
-          model: agent.ai_config?.model || "gemini-3-pro-preview",
+          model: agent.ai_config?.model || "gemini-3-flash-preview",
           temperature: agent.ai_config?.temperature ?? 0.7,
           max_tokens: agent.ai_config?.max_tokens ?? 4096,
         },
@@ -379,29 +383,75 @@ You should:
     });
   };
 
+  const [jsonErrors, setJsonErrors] = useState<Record<string, string>>({});
+
+  const validateJson = (field: string, value: string): boolean => {
+    try {
+      if (value.trim()) {
+        JSON.parse(value);
+      }
+      setJsonErrors(prev => ({ ...prev, [field]: '' }));
+      return true;
+    } catch (e) {
+      setJsonErrors(prev => ({ ...prev, [field]: 'Invalid JSON format' }));
+      return false;
+    }
+  };
+
   return (
     <Tabs defaultValue="basic" className="w-full">
-      <TabsList className="grid w-full grid-cols-7">
-        <TabsTrigger value="basic">Basic</TabsTrigger>
-        <TabsTrigger value="ai">AI Config</TabsTrigger>
-        <TabsTrigger value="execution">Execution</TabsTrigger>
-        <TabsTrigger value="skills">Skills</TabsTrigger>
-        <TabsTrigger value="mcp">MCP</TabsTrigger>
-        <TabsTrigger value="messaging">Messaging</TabsTrigger>
-        <TabsTrigger value="advanced">Advanced</TabsTrigger>
-      </TabsList>
+      <ScrollArea className="w-full whitespace-nowrap">
+        <TabsList className="inline-flex w-max gap-1 p-1">
+          <TabsTrigger value="basic" className="gap-1.5">
+            <Info className="h-3.5 w-3.5" />
+            Basic
+          </TabsTrigger>
+          <TabsTrigger value="ai" className="gap-1.5">
+            <Brain className="h-3.5 w-3.5" />
+            AI Config
+          </TabsTrigger>
+          <TabsTrigger value="execution" className="gap-1.5">
+            <Shield className="h-3.5 w-3.5" />
+            Execution
+          </TabsTrigger>
+          <TabsTrigger value="skills" className="gap-1.5">
+            <Wrench className="h-3.5 w-3.5" />
+            Skills
+          </TabsTrigger>
+          <TabsTrigger value="mcp" className="gap-1.5">
+            <Server className="h-3.5 w-3.5" />
+            MCP
+          </TabsTrigger>
+          <TabsTrigger value="messaging" className="gap-1.5">
+            <MessageSquare className="h-3.5 w-3.5" />
+            Messaging
+          </TabsTrigger>
+          <TabsTrigger value="advanced" className="gap-1.5">
+            <Key className="h-3.5 w-3.5" />
+            Advanced
+          </TabsTrigger>
+        </TabsList>
+        <ScrollBar orientation="horizontal" />
+      </ScrollArea>
 
       {/* Basic Info Tab */}
       <TabsContent value="basic" className="space-y-4 py-4">
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Agent Name</Label>
+            <Label htmlFor="name" className="flex items-center gap-1">
+              Agent Name
+              <span className="text-destructive">*</span>
+            </Label>
             <Input
               id="name"
               placeholder="e.g., Research Assistant"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className={!formData.name?.trim() ? "border-amber-500 focus:border-amber-500" : ""}
             />
+            {!formData.name?.trim() && (
+              <p className="text-xs text-amber-600">Name is required</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="personality">Personality</Label>
@@ -426,7 +476,9 @@ You should:
             placeholder="What does this agent specialize in?"
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            className="min-h-[80px]"
           />
+          <p className="text-xs text-muted-foreground">Brief description of the agent's purpose and capabilities</p>
         </div>
 
         <div className="space-y-2">
@@ -445,7 +497,19 @@ You should:
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="expertise">Expertise (comma-separated)</Label>
+          <Label htmlFor="expertise" className="flex items-center gap-2">
+            Expertise
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Separate multiple areas with commas</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </Label>
           <Input
             id="expertise"
             placeholder="e.g., Research, Data Analysis, Academic Writing"
@@ -460,6 +524,15 @@ You should:
               })
             }
           />
+          {formData.characteristics?.expertise && formData.characteristics.expertise.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {formData.characteristics.expertise.map((exp, i) => (
+                <Badge key={i} variant="secondary" className="text-xs">
+                  {exp}
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
       </TabsContent>
 
@@ -513,7 +586,7 @@ You should:
             <SelectContent>
               {formData.ai_config?.provider === "gemini" && (
                 <>
-                  <SelectItem value="gemini-3-pro-preview">Gemini 3 Pro (Preview) - Most Intelligent</SelectItem>
+                  <SelectItem value="gemini-3-flash-preview">Gemini 3 Pro (Preview) - Most Intelligent</SelectItem>
                   <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash (Preview) - Balanced</SelectItem>
                   <SelectItem value="gemini-2.0-flash-exp">Gemini 2.0 Flash Exp (Preview) - Best Performance</SelectItem>
                   <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
@@ -646,6 +719,60 @@ You should:
                 </SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <Separator />
+
+          <div>
+            <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+              <Box className="h-4 w-4" />
+              Skill/Tool Sandbox Mode
+            </h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              Controls how skills and tools execute commands. Sandbox mode uses Docker isolation for security.
+            </p>
+            <Select
+              value={formData.execution_settings?.sandbox_mode || "flexible"}
+              onValueChange={(value: any) =>
+                setFormData({
+                  ...formData,
+                  execution_settings: {
+                    ...formData.execution_settings!,
+                    sandbox_mode: value,
+                  },
+                })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select sandbox mode" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sandbox">
+                  <div className="flex items-center gap-2">
+                    <Box className="h-4 w-4 text-green-500" />
+                    <span>Sandbox - Docker isolation (Recommended)</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="direct">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="h-4 w-4 text-red-500" />
+                    <span>Direct - No sandboxing (Fast but less secure)</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="flexible">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-blue-500" />
+                    <span>Flexible - Respect skill preference</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-2 p-2 bg-muted/50 rounded">
+              <strong>Note:</strong> Agent sandbox mode overrides skill settings for safety.
+              <br />• <strong>Sandbox:</strong> Forces all skills to use Docker (requires Docker)
+              <br />• <strong>Direct:</strong> Skips sandbox even if skill prefers it
+              <br />• <strong>Flexible:</strong> Uses sandbox if Docker available & skill requests it
+            </p>
           </div>
 
           <Separator />
@@ -885,67 +1012,115 @@ You should:
       </TabsContent>
 
       <TabsContent value="advanced" className="space-y-4 py-4">
-        <div className="rounded-md border p-4 space-y-4">
+        <Alert className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Advanced settings require careful configuration. Invalid JSON will prevent saving.
+          </AlertDescription>
+        </Alert>
+
+        <div className="rounded-md border p-4 space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="working_directories">Allowed Working Directories</Label>
+            <Label htmlFor="working_directories" className="flex items-center gap-2">
+              <Database className="h-4 w-4" />
+              Allowed Working Directories
+            </Label>
             <Textarea
               id="working_directories"
               placeholder="/home/user/workspace&#10;/tmp/agent"
               value={formData.working_directories?.join('\n') || ""}
               onChange={(e) => setFormData({ ...formData, working_directories: e.target.value.split('\n').filter(Boolean) })}
+              className="font-mono text-sm min-h-[80px]"
             />
-            <p className="text-xs text-muted-foreground">List of directories this agent is allowed to access (one per line). Sandboxing enforced.</p>
+            <p className="text-xs text-muted-foreground">One directory per line. Agent will only access these directories.</p>
           </div>
 
+          <Separator />
+
           <div className="space-y-2">
-            <Label>Permissions (JSON)</Label>
+            <Label className="flex items-center gap-2">
+              <Shield className="h-4 w-4" />
+              Permissions (JSON)
+            </Label>
             <Textarea
-              className="font-mono min-h-[100px]"
+              className={cn(
+                "font-mono text-sm min-h-[100px]",
+                jsonErrors.permissions && "border-destructive focus:border-destructive"
+              )}
               placeholder='{"allow_fs": true, "allow_net": true}'
               value={typeof formData.permissions === 'string' ? formData.permissions : JSON.stringify(formData.permissions || {}, null, 2)}
               onChange={(e) => {
-                try {
-                  const val = e.target.value;
-                  // Store as object if valid json, else keep as string to allow typing
+                const val = e.target.value;
+                if (validateJson('permissions', val)) {
                   try {
-                    setFormData({ ...formData, permissions: JSON.parse(val) })
+                    setFormData({ ...formData, permissions: JSON.parse(val) });
                   } catch {
-                    // If parse fails, technically we can't set it to Partial<AgentType> permissions which is Record.
-                    // But for the sake of the form state, let's assume we handle it or use a separate state.
-                    // Simpler approach: Just use a text area and parse on save, or use a "permissions_text" state.
-                    // For now, let's just let the user type and only save if valid, strictly.
-                    // Actually, let's just use stringify/parse on blur or save.
-                    // Better: Just keeping it simple for now.
+                    // Keep as-is while typing
                   }
-                } catch (e) { }
-              }}
-            />
-            <p className="text-xs text-muted-foreground">Configure specific permissions for this agent.</p>
-          </div>
-
-          <div className="space-y-2">
-            <Label>API Keys (JSON)</Label>
-            <Textarea
-              className="font-mono min-h-[100px]"
-              placeholder='{"GITHUB_TOKEN": "..."}'
-              value={JSON.stringify(formData.api_keys, null, 2)}
-              onChange={(e) => {
-                try {
-                  setFormData({ ...formData, api_keys: JSON.parse(e.target.value) })
-                } catch (e) {
-                  // ignore parse errors while typing
                 }
               }}
+              onBlur={(e) => validateJson('permissions', e.target.value)}
             />
+            {jsonErrors.permissions ? (
+              <p className="text-xs text-destructive flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {jsonErrors.permissions}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">Configure file system, network, and other permissions.</p>
+            )}
+          </div>
+
+          <Separator />
+
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <Key className="h-4 w-4" />
+              API Keys (JSON)
+            </Label>
+            <Textarea
+              className={cn(
+                "font-mono text-sm min-h-[100px]",
+                jsonErrors.apiKeys && "border-destructive focus:border-destructive"
+              )}
+              placeholder='{"GITHUB_TOKEN": "ghp_...", "OPENAI_KEY": "sk-..."}'
+              value={JSON.stringify(formData.api_keys || {}, null, 2)}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (validateJson('apiKeys', val)) {
+                  try {
+                    setFormData({ ...formData, api_keys: JSON.parse(val) });
+                  } catch {
+                    // Keep as-is while typing
+                  }
+                }
+              }}
+              onBlur={(e) => validateJson('apiKeys', e.target.value)}
+            />
+            {jsonErrors.apiKeys ? (
+              <p className="text-xs text-destructive flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {jsonErrors.apiKeys}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">Store API keys securely for this agent. Keys are encrypted at rest.</p>
+            )}
           </div>
         </div>
       </TabsContent>
 
-      <div className="mt-6 flex justify-end gap-2">
+      <div className="mt-6 flex justify-end gap-3 pt-4 border-t">
         <Button variant="outline" onClick={onClose}>
           Cancel
         </Button>
-        <Button onClick={handleSave}>
+        <Button
+          onClick={handleSave}
+          disabled={!formData.name?.trim() || createAgent.isPending || updateAgent.isPending}
+          className="min-w-[120px]"
+        >
+          {(createAgent.isPending || updateAgent.isPending) && (
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          )}
           {agent ? "Save Changes" : "Create Agent"}
         </Button>
       </div>

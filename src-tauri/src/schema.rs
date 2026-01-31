@@ -23,6 +23,8 @@ diesel::table! {
         updated_at -> BigInt,
         platform_configs -> Nullable<Text>,
         execution_settings -> Nullable<Text>,
+        scope_type -> Nullable<Text>,
+        workspace_path -> Nullable<Text>,
     }
 }
 
@@ -117,6 +119,22 @@ diesel::table! {
         version -> Integer,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        source_path -> Nullable<Text>,
+        category -> Nullable<Text>,
+        requires_sandbox -> Integer,
+        sandbox_config -> Nullable<Text>,
+        execution_mode -> Text,
+    }
+}
+
+diesel::table! {
+    skill_files (id) {
+        id -> Text,
+        skill_id -> Text,
+        relative_path -> Text,
+        content -> Text,
+        file_type -> Text,
+        created_at -> Timestamp,
     }
 }
 
@@ -135,6 +153,7 @@ diesel::joinable!(blocks -> pages (page_id));
 diesel::joinable!(attachments -> pages (page_id));
 diesel::joinable!(agent_skill_assignments -> agents (agent_id));
 diesel::joinable!(agent_skill_assignments -> agent_skills (skill_id));
+diesel::joinable!(skill_files -> agent_skills (skill_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     agents,
@@ -146,4 +165,22 @@ diesel::allow_tables_to_appear_in_same_query!(
     attachments,
     agent_skills,
     agent_skill_assignments,
+    skill_files,
+    mcp_servers,
 );
+
+diesel::table! {
+    mcp_servers (id) {
+        id -> Text,
+        name -> Text,
+        server_type -> Text,
+        command -> Nullable<Text>,
+        args -> Nullable<Text>,
+        env -> Nullable<Text>,
+        url -> Nullable<Text>,
+        is_enabled -> Integer,
+        template_id -> Nullable<Text>,
+        created_at -> BigInt,
+        updated_at -> BigInt,
+    }
+}
