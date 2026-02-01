@@ -262,6 +262,9 @@ function AgentForm({ agent, onClose }: AgentFormProps) {
   const createAgent = useCreateAgent();
   const updateAgent = useUpdateAgent();
 
+  // Check if this is the default agent (read-only for skills/mcp)
+  const isDefaultAgent = agent?.name === "AnyCoworker Default";
+
   // Fetch available capabilities
   const { data: allSkills = [] } = useQuery({ queryKey: ['skills'], queryFn: () => anycoworkApi.listSkills() });
   const { data: allMCPServers = [] } = useQuery({ queryKey: ['mcp_servers'], queryFn: () => anycoworkApi.listMCPServers() });
@@ -863,20 +866,37 @@ You should:
       </TabsContent>
 
       <TabsContent value="skills" className="space-y-4 py-4">
+        {isDefaultAgent && (
+          <Alert className="mb-4">
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              The default agent uses all enabled skills in the system. Skills are managed globally in the Skills page.
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="rounded-md border p-4">
-          <h3 className="mb-4 text-sm font-medium">Select Enabled Skills</h3>
+          <h3 className="mb-4 text-sm font-medium">
+            {isDefaultAgent ? "Available Skills (Read-only)" : "Select Enabled Skills"}
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {allSkills.map((skill: any) => (
-              <div key={skill.id} className="flex items-start space-x-3 rounded-md border p-3 hover:bg-muted/50">
+              <div key={skill.id} className={cn(
+                "flex items-start space-x-3 rounded-md border p-3",
+                !isDefaultAgent && "hover:bg-muted/50"
+              )}>
                 <Checkbox
                   id={`skill-${skill.id}`}
-                  checked={formData.skills?.includes(skill.id)}
-                  onCheckedChange={() => toggleSkill(skill.id)}
+                  checked={isDefaultAgent ? true : formData.skills?.includes(skill.id)}
+                  onCheckedChange={() => !isDefaultAgent && toggleSkill(skill.id)}
+                  disabled={isDefaultAgent}
                 />
                 <div className="grid gap-1.5 leading-none">
                   <label
                     htmlFor={`skill-${skill.id}`}
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    className={cn(
+                      "text-sm font-medium leading-none",
+                      isDefaultAgent && "cursor-default opacity-70"
+                    )}
                   >
                     {skill.name}
                   </label>
@@ -892,18 +912,37 @@ You should:
       </TabsContent>
 
       <TabsContent value="mcp" className="space-y-4 py-4">
+        {isDefaultAgent && (
+          <Alert className="mb-4">
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              The default agent uses all enabled MCP servers in the system. MCP servers are managed globally in the Settings page.
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="rounded-md border p-4">
-          <h3 className="mb-4 text-sm font-medium">Connect MCP Servers</h3>
+          <h3 className="mb-4 text-sm font-medium">
+            {isDefaultAgent ? "Available MCP Servers (Read-only)" : "Connect MCP Servers"}
+          </h3>
           <div className="grid grid-cols-1 gap-4">
             {allMCPServers.map((server: any) => (
               <div key={server.id} className="flex items-center space-x-3 rounded-md border p-3">
                 <Checkbox
                   id={`mcp-${server.id}`}
-                  checked={formData.mcp_servers?.includes(server.id)}
-                  onCheckedChange={() => toggleMCP(server.id)}
+                  checked={isDefaultAgent ? true : formData.mcp_servers?.includes(server.id)}
+                  onCheckedChange={() => !isDefaultAgent && toggleMCP(server.id)}
+                  disabled={isDefaultAgent}
                 />
                 <div className="flex-1">
-                  <label htmlFor={`mcp-${server.id}`} className="text-sm font-medium">{server.name}</label>
+                  <label 
+                    htmlFor={`mcp-${server.id}`} 
+                    className={cn(
+                      "text-sm font-medium",
+                      isDefaultAgent && "cursor-default opacity-70"
+                    )}
+                  >
+                    {server.name}
+                  </label>
                   <p className="text-xs text-muted-foreground">{server.server_url}</p>
                 </div>
                 <Badge variant="outline">{server.transport}</Badge>

@@ -1,6 +1,6 @@
 You are an intelligent agent with access to the following tools:
 
-{{ tools_desc }}
+{{ tools_desc | safe }}
 
 RULES:
 1. To use a tool, you MUST output ONLY a valid JSON object matching the 'tool' and 'args' schema.

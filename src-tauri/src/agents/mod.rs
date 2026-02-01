@@ -88,13 +88,27 @@ impl<R: Runtime> AgentLoop<R> {
         if let Ok(mut conn) = db_pool.get() {
             use crate::schema::{agent_skill_assignments, agent_skills, skill_files};
             
-            // 1. Get assigned skill IDs
-            let assigned_ids: Result<Vec<String>, _> = agent_skill_assignments::table
-                .filter(agent_skill_assignments::agent_id.eq(&agent_db.id))
-                .select(agent_skill_assignments::skill_id)
-                .load::<String>(&mut conn);
+            // Check if this is the default agent
+            let is_default_agent = agent_db.name == "AnyCoworker Default";
+            
+            // 1. Get skill IDs - either all enabled (for default) or assigned (for custom agents)
+            let skill_ids: Vec<String> = if is_default_agent {
+                // Default agent uses ALL enabled skills
+                agent_skills::table
+                    .filter(agent_skills::enabled.eq(1))
+                    .select(agent_skills::id)
+                    .load::<String>(&mut conn)
+                    .unwrap_or_default()
+            } else {
+                // Custom agents use only assigned skills
+                agent_skill_assignments::table
+                    .filter(agent_skill_assignments::agent_id.eq(&agent_db.id))
+                    .select(agent_skill_assignments::skill_id)
+                    .load::<String>(&mut conn)
+                    .unwrap_or_default()
+            };
 
-            if let Ok(skill_ids) = assigned_ids {
+            if !skill_ids.is_empty() {
                 // 2. Fetch Skills
                 let skills: Result<Vec<crate::models::AgentSkill>, _> = agent_skills::table
                     .filter(agent_skills::id.eq_any(&skill_ids))
@@ -170,6 +184,9 @@ impl<R: Runtime> AgentLoop<R> {
              std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
         };
 
+
+
+        log::info!("AgentLoop initialized for agent {}. Loaded tools: {}", agent_db.id, tools.len());
         Self {
             agent_id: agent_db.id.clone(),
             session_id: "temp".to_string(), // Set later
@@ -236,6 +253,9 @@ impl<R: Runtime> AgentLoop<R> {
         env.add_template("tool_use", &template_str).unwrap(); // Panic if template invalid (should only happen in dev)
 
         let tools_json = serde_json::to_string_pretty(&tools_desc).unwrap();
+        log::info!("Generating prompt with tools JSON length: {}", tools_json.len());
+        // log::debug!("Tools JSON: {}", tools_json); // Uncomment for verbose debugging
+        
         let tmpl = env.get_template("tool_use").unwrap();
 
         // Render prompt (Plan context can be passed here if extended)

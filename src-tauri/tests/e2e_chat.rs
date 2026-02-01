@@ -1,12 +1,11 @@
-use anycowork::commands::agents::{approve_action, chat_internal, create_agent};
+use anycowork::commands::agents::{chat_internal, create_agent};
 use anycowork::commands::sessions::create_session;
 use anycowork::database::create_test_pool;
 use anycowork::permissions::PermissionManager;
 use anycowork::AppState;
-use serde_json::json;
 use std::sync::Arc;
-use tauri::test::{mock_builder, mock_context, noop_assets};
-use tauri::{App, Emitter, Manager};
+use tauri::test::mock_builder;
+use tauri::Manager;
 use tokio::time::{sleep, Duration};
 
 #[tokio::test]
@@ -72,6 +71,7 @@ async fn test_e2e_agent_interaction() {
             test_file_path
         ),
         None,
+        None, // model
     )
     .await;
 

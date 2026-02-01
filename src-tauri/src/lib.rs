@@ -20,6 +20,7 @@ use telegram::TelegramBotManager;
 use tokio::sync::oneshot;
 
 // AppState definition
+#[derive(Clone)]
 pub struct AppState {
     pub db_pool: DbPool,
     pub pending_approvals: Arc<DashMap<String, oneshot::Sender<bool>>>,

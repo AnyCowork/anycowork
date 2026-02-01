@@ -93,6 +93,9 @@ pub async fn update_agent(
         .first::<Agent>(&mut conn)
         .map_err(|_| "Agent not found".to_string())?;
 
+    // Check if this is the default agent - prevent skills/mcp changes
+    let is_default_agent = agent.name == "AnyCoworker Default";
+
     // Update fields if present
     if let Some(n) = data.name {
         agent.name = n;
@@ -126,35 +129,38 @@ pub async fn update_agent(
         agent.system_prompt = Some(prompt);
     }
 
-    if let Some(s) = data.skills {
-        agent.skills = Some(s.join(", "));
+    // Skills and MCP servers - skip for default agent (it uses all enabled)
+    if !is_default_agent {
+        if let Some(s) = data.skills {
+            agent.skills = Some(s.join(", "));
 
-        // Sync agent_skill_assignments
-        use crate::models::NewAgentSkillAssignment;
-        use schema::agent_skill_assignments::dsl::{agent_skill_assignments, agent_id as col_agent_id, skill_id as col_skill_id};
+            // Sync agent_skill_assignments
+            use crate::models::NewAgentSkillAssignment;
+            use schema::agent_skill_assignments::dsl::{agent_skill_assignments, agent_id as col_agent_id};
 
-        // 1. Delete existing assignments for this agent
-        diesel::delete(agent_skill_assignments.filter(col_agent_id.eq(&agent_id)))
-            .execute(&mut conn)
-            .map_err(|e| format!("Failed to clear old skill assignments: {}", e))?;
-
-        // 2. Insert new assignments
-        if !s.is_empty() {
-             let new_assignments: Vec<NewAgentSkillAssignment> = s.iter().map(|sid| NewAgentSkillAssignment {
-                agent_id: agent_id.clone(),
-                skill_id: sid.clone(),
-                created_at: chrono::Utc::now().naive_utc(),
-            }).collect();
-
-            diesel::insert_into(agent_skill_assignments)
-                .values(&new_assignments)
+            // 1. Delete existing assignments for this agent
+            diesel::delete(agent_skill_assignments.filter(col_agent_id.eq(&agent_id)))
                 .execute(&mut conn)
-                .map_err(|e| format!("Failed to insert new skill assignments: {}", e))?;
-        }
-    }
+                .map_err(|e| format!("Failed to clear old skill assignments: {}", e))?;
 
-    if let Some(m) = data.mcp_servers {
-        agent.mcp_servers = Some(m.join(", "));
+            // 2. Insert new assignments
+            if !s.is_empty() {
+                 let new_assignments: Vec<NewAgentSkillAssignment> = s.iter().map(|sid| NewAgentSkillAssignment {
+                    agent_id: agent_id.clone(),
+                    skill_id: sid.clone(),
+                    created_at: chrono::Utc::now().naive_utc(),
+                }).collect();
+
+                diesel::insert_into(agent_skill_assignments)
+                    .values(&new_assignments)
+                    .execute(&mut conn)
+                    .map_err(|e| format!("Failed to insert new skill assignments: {}", e))?;
+            }
+        }
+
+        if let Some(m) = data.mcp_servers {
+            agent.mcp_servers = Some(m.join(", "));
+        }
     }
 
     // Execution Settings
