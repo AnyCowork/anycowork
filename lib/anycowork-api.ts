@@ -279,12 +279,12 @@ export const anycoworkApi = {
 
   approveAction: async (stepId: string) => {
     console.log("Approving action with stepId:", stepId);
-    return invoke('approve_action', { stepId: stepId, step_id: stepId });
+    return invoke('approve_action', { stepId });
   },
 
   rejectAction: async (stepId: string) => {
     console.log("Rejecting action with stepId:", stepId);
-    return invoke('reject_action', { stepId: stepId, step_id: stepId });
+    return invoke('reject_action', { stepId });
   },
 
   // Stubs for other methods to prevent compilation errors in UI

@@ -1,7 +1,4 @@
-pub mod bash;
-pub mod filesystem;
-pub mod office;
-pub mod search;
+pub mod adapter;
 
 #[cfg(test)]
 pub mod workflow_tests;
@@ -12,6 +9,9 @@ use serde_json::Value;
 use std::sync::Arc;
 
 use tauri::Runtime;
+
+// Re-export adapter utilities
+pub use adapter::{create_default_tools, TauriBridgePermissionHandler};
 
 pub struct ToolContext<R: Runtime> {
     pub permissions: Arc<PermissionManager>,

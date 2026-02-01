@@ -103,6 +103,73 @@ You should:
     }
 }
 
+/// Cleanup duplicate skills from the database
+/// This is called on startup to fix any duplicates that may have been created before the fix
+pub fn cleanup_duplicate_skills(pool: &DbPool) {
+    use crate::schema::{agent_skill_assignments, agent_skills, skill_files};
+    use std::collections::HashMap;
+
+    let mut conn = match pool.get() {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("Failed to get connection for skill cleanup: {}", e);
+            return;
+        }
+    };
+
+    // Get all skills ordered by updated_at desc (most recent first)
+    let all_skills: Vec<crate::models::AgentSkill> = match agent_skills::table
+        .order(agent_skills::updated_at.desc())
+        .load(&mut conn)
+    {
+        Ok(s) => s,
+        Err(e) => {
+            log::debug!("Could not load skills for cleanup (table may not exist yet): {}", e);
+            return;
+        }
+    };
+
+    // Group by name, keeping track of which to delete
+    let mut seen_names: HashMap<String, String> = HashMap::new();
+    let mut ids_to_delete: Vec<String> = Vec::new();
+
+    for skill in all_skills {
+        if seen_names.contains_key(&skill.name) {
+            // This is a duplicate (older one since we sorted by updated_at desc)
+            ids_to_delete.push(skill.id);
+        } else {
+            // First occurrence (most recent), keep it
+            seen_names.insert(skill.name, skill.id);
+        }
+    }
+
+    if ids_to_delete.is_empty() {
+        return;
+    }
+
+    log::info!("Found {} duplicate skills to clean up", ids_to_delete.len());
+
+    // Delete duplicates
+    for id in &ids_to_delete {
+        // Delete skill files first
+        diesel::delete(skill_files::table.filter(skill_files::skill_id.eq(id)))
+            .execute(&mut conn)
+            .ok();
+
+        // Delete skill assignments
+        diesel::delete(agent_skill_assignments::table.filter(agent_skill_assignments::skill_id.eq(id)))
+            .execute(&mut conn)
+            .ok();
+
+        // Delete the skill
+        diesel::delete(agent_skills::table.filter(agent_skills::id.eq(id)))
+            .execute(&mut conn)
+            .ok();
+    }
+
+    log::info!("Cleaned up {} duplicate skills", ids_to_delete.len());
+}
+
 // Helper to setup an in-memory database for testing
 pub fn create_test_pool() -> DbPool {
     let temp_dir = std::env::temp_dir();

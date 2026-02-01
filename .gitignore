@@ -42,3 +42,4 @@ src-tauri/anycowork.db
 anycowork.db
 .next
 *.pyc
+/target/

@@ -9,18 +9,64 @@
 ## Architecture Summary
 
 ```
-AnyCowork Desktop (Tauri)
+┌─────────────────────────────────────────────────────────────┐
+│                    Platform Adapters                         │
+├──────────────┬──────────────┬───────────────┬───────────────┤
+│ Tauri Desktop│   CLI        │  Server/API   │ Tauri Mobile  │
+│ (current)    │  (future)    │  (future)     │ (future)      │
+└──────┬───────┴──────┬───────┴───────┬───────┴───────┬───────┘
+       │              │               │               │
+       └──────────────┴───────┬───────┴───────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     anycowork-core                           │
+│  Platform-Independent Agent Library                          │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
+│  │ Agent System    │  │ Tool System     │  │ Skills       │ │
+│  │ - Coordinator   │  │ - BashTool      │  │ - Loader     │ │
+│  │ - Planner       │  │ - FileTool      │  │ - Executor   │ │
+│  │ - Router        │  │ - SearchTool    │  │ - Registry   │ │
+│  │ - Executor      │  │ - OfficeTool    │  │              │ │
+│  └─────────────────┘  └─────────────────┘  └──────────────┘ │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
+│  │ Sandbox         │  │ Permissions     │  │ Events       │ │
+│  │ - Docker        │  │ - Manager       │  │ - Channel    │ │
+│  │ - WASM (future) │  │ - Policies      │  │ - Subscriber │ │
+│  │ - Native        │  │ - Cache         │  │              │ │
+│  └─────────────────┘  └─────────────────┘  └──────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                        rig-core                              │
+│  - Provider clients (OpenAI, Anthropic, Gemini, Ollama...)  │
+│  - Tool trait & ToolSet                                      │
+│  - PromptHook for approvals                                  │
+│  - Multi-turn agent execution                                │
+│  - Streaming                                                 │
+└─────────────────────────────────────────────────────────────┘
+
+AnyCowork Desktop (Tauri) - Current Implementation
 ├── Frontend (React + Vite)
 │   ├── UI Components (shadcn/ui)
 │   ├── State Management (React Query)
 │   └── Tauri IPC Client
 │
-├── Backend (Rust + Tauri)
+├── Tauri Adapter (anycowork-tauri)
 │   ├── Tauri Commands (IPC handlers)
-│   ├── Agent System (rig-core)
-│   ├── Telegram Bot (teloxide)
-│   ├── Database (Diesel + SQLite)
-│   └── Event System
+│   ├── Permission Handler (UI-based approvals)
+│   ├── Event Bridge (Core → Frontend)
+│   └── Database Integration (Diesel + SQLite)
+│
+├── Core Library (anycowork-core)
+│   ├── Agent System (Coordinator, Planner, Router)
+│   ├── Tool System (Bash, Filesystem, Search, Office)
+│   ├── Sandbox System (Docker, Native)
+│   ├── Permission System (Platform-agnostic)
+│   ├── Event System (Platform-agnostic)
+│   └── Skills System (Loader, Executor)
 │
 └── Storage
     └── SQLite Database (local)
@@ -30,10 +76,36 @@ AnyCowork Desktop (Tauri)
 
 ### Technology Stack
 
+- **Core Library**: anycowork-core (Platform-independent Rust library)
 - **Backend**: Rust, Tauri 2.0, Diesel ORM
 - **AI**: Gemini 3 Pro (Primary), rig-core (Orchestration)
 - **Extensibility**: MCP (Model Context Protocol) for tools
+- **Sandbox**: Docker (isolation), Native (fallback)
 - **Telegram**: teloxide (async Telegram bot framework)
 - **Frontend**: React 19, Vite, TypeScript, Tailwind CSS
 - **UI**: shadcn/ui, Radix UI primitives
 - **Database**: SQLite with Diesel migrations
+
+## Workspace Structure
+
+The project uses a Cargo workspace with three main crates:
+
+1. **anycowork-core** - Platform-independent core library
+   - Agent system (Coordinator, Planner, Router, Executor)
+   - Tool implementations (Bash, Filesystem, Search, Office)
+   - Sandbox abstractions (Docker, Native)
+   - Permission system (platform-agnostic)
+   - Event system (platform-agnostic)
+   - Skills system (Loader, Executor)
+
+2. **anycowork-tauri** - Tauri platform adapter
+   - Tauri command implementations
+   - Permission handler (UI-based approvals)
+   - Event bridge (Core → Frontend)
+   - Platform-specific integrations
+
+3. **src-tauri** - Tauri application entry point
+   - Application state management
+   - Database integration (Diesel + SQLite)
+   - Command registration
+   - Window management

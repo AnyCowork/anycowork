@@ -12,13 +12,18 @@ npm run tauri dev
 ### Backend (Rust + Tauri)
 
 ```bash
-cd src-tauri
-
-# Build
+# Build entire workspace
 cargo build
+
+# Build specific crate
+cargo build -p anycowork-core
+cargo build -p anycowork-tauri
 
 # Run tests
 cargo test
+
+# Run tests for specific crate
+cargo test -p anycowork-core
 
 # Format code
 cargo fmt
@@ -63,25 +68,57 @@ diesel migration revert
 
 ## Adding New Features
 
-### Adding a New Tauri Command
+### Adding Core Library Features
 
-1. Define the command in `src/lib.rs`:
+1. Implement in `crates/anycowork-core/src/`:
 ```rust
-#[tauri::command]
-async fn my_command(state: State<'_, AppState>, param: String) -> Result<MyResult, String> {
-    // Implementation
+// Example: New tool in crates/anycowork-core/src/tools/my_tool.rs
+use rig::tool::{Tool, ToolDefinition};
+
+pub struct MyTool { /* ... */ }
+
+impl Tool for MyTool {
+    const NAME: &'static str = "my_tool";
+    // ... implementation
 }
 ```
 
-2. Register in `invoke_handler`:
+2. Export from module:
+```rust
+// crates/anycowork-core/src/tools/mod.rs
+pub mod my_tool;
+pub use my_tool::MyTool;
+```
+
+3. Use in Tauri adapter:
+```rust
+// crates/anycowork-tauri/src/commands.rs
+use anycowork_core::tools::MyTool;
+```
+
+### Adding a New Tauri Command
+
+1. Define the command in `crates/anycowork-tauri/src/commands.rs`:
+```rust
+#[tauri::command]
+pub async fn my_command(
+    state: State<'_, AppState>,
+    param: String
+) -> Result<MyResult, String> {
+    // Use anycowork-core functionality
+    Ok(result)
+}
+```
+
+2. Register in `src-tauri/src/lib.rs`:
 ```rust
 .invoke_handler(tauri::generate_handler![
     // ... existing commands
-    my_command,
+    anycowork_tauri::commands::my_command,
 ])
 ```
 
-3. Add to frontend API (`frontend/lib/anycowork-api.ts`):
+3. Add to frontend API (`lib/anycowork-api.ts`):
 ```typescript
 myCommand: async (param: string) => {
     return invoke<MyResult>('my_command', { param });

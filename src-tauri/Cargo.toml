@@ -1,9 +1,9 @@
 [package]
 name = "anycowork"
-version = "0.1.0"
+version.workspace = true
 description = "AnyCowork Tauri App"
-authors = ["you"]
-edition = "2021"
+authors.workspace = true
+edition.workspace = true
 rust-version = "1.77.2"
 
 [lib]
@@ -14,42 +14,75 @@ path = "src/lib.rs"
 tauri-build = { version = "2.0.0", features = [] }
 
 [dependencies]
+# Internal crates
+anycowork-core = { path = "../crates/anycowork-core" }
+anycowork-tauri = { path = "../crates/anycowork-tauri" }
+
+# Tauri
 tauri = { version = "2.0.0", features = ["test"] }
 tauri-plugin-shell = "2.0.0"
 tauri-plugin-dialog = "2.0.0"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tokio = { version = "1", features = ["full"] }
-rig-core = "0.29.0" 
+
+# Serialization (workspace)
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Async (workspace)
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+
+# AI (workspace)
+rig-core = { workspace = true }
+
+# Utilities (workspace)
+uuid = { workspace = true }
+chrono = { workspace = true }
+dashmap = { workspace = true }
+log = { workspace = true }
+
+# Schema/Validation (workspace)
+schemars = { workspace = true }
+jsonschema = { workspace = true }
+
+# Templating (workspace)
+minijinja = { workspace = true }
+
+# File processing (workspace)
+walkdir = { workspace = true }
+zip = { workspace = true }
+tempfile = { workspace = true }
+
+# HTTP client (workspace)
+reqwest = { workspace = true }
+
+# Document processing (workspace)
+calamine = { workspace = true }
+docx-rs = { workspace = true }
+pdf-extract = { workspace = true }
+csv = { workspace = true }
+
+# Crypto (workspace)
+sha2 = { workspace = true }
+hex = { workspace = true }
+
+# Database (local)
 diesel = { version = "2.2.0", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "2.2.0"
+
+# Environment
 dotenvy = "0.15"
-uuid = { version = "1.19.0", features = ["serde", "v4"] }
-chrono = { version = "0.4.43", features = ["serde"] }
-dashmap = "6.1.0"
-tokio-stream = "0.1.18"
-teloxide = { version = "0.13", features = ["macros"] }
-log = "0.4"
 env_logger = "0.11"
-async-trait = "0.1"
-futures = "0.3"
+
+# Telegram
+teloxide = { version = "0.13", features = ["macros"] }
+
+# OpenAI (additional)
 async-openai = "0.28.0"
-sha2 = "0.10.9"
-walkdir = "2.5.0"
-hex = "0.4.3"
-calamine = "0.26.1"
-docx-rs = "0.4.5"
-pdf-extract = "0.7.4"
-csv = "1.3.0"
-jsonschema = "0.19.0"
-minijinja = { version = "2.14.0", features = ["loader"] }
-schemars = "0.8"
-reqwest = { version = "0.11", features = ["json"] }
-zip = "2.2"
-tempfile = "3.24.0"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
 
 [dev-dependencies]
-tempfile = "3.24.0"
+tempfile = { workspace = true }

@@ -238,6 +238,7 @@ pub async fn import_skill_from_zip(
 }
 
 /// Helper function to save a loaded skill to the database
+/// If a skill with the same name already exists, it will be updated instead of creating a duplicate
 async fn save_loaded_skill(
     state: &State<'_, AppState>,
     loaded: crate::skills::loader::LoadedSkill,
@@ -248,7 +249,12 @@ async fn save_loaded_skill(
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
     let skill = &loaded.skill;
-    let skill_id = uuid::Uuid::new_v4().to_string();
+
+    // Check if a skill with the same name already exists
+    let existing_skill: Option<AgentSkill> = agent_skills::table
+        .filter(agent_skills::name.eq(&skill.name))
+        .first::<AgentSkill>(&mut conn)
+        .ok();
 
     // Serialize sandbox config if present
     let sandbox_config_json = skill
@@ -256,28 +262,63 @@ async fn save_loaded_skill(
         .as_ref()
         .map(|c| serde_json::to_string(c).unwrap_or_default());
 
-    let new_skill = NewAgentSkill {
-        id: skill_id.clone(),
-        name: skill.name.clone(),
-        display_title: skill.name.clone(), // Use name as display title
-        description: skill.description.clone(),
-        skill_content: skill.body.clone(),
-        additional_files_json: None, // Will store files separately
-        enabled: 1,
-        version: 1,
-        created_at: chrono::Utc::now().naive_utc(),
-        updated_at: chrono::Utc::now().naive_utc(),
-        source_path,
-        category: skill.category.clone(),
-        requires_sandbox: if skill.requires_sandbox { 1 } else { 0 },
-        sandbox_config: sandbox_config_json,
-        execution_mode: "direct".to_string(),
-    };
+    let skill_id = if let Some(existing) = existing_skill {
+        // Update existing skill instead of creating duplicate
+        let update = UpdateAgentSkill {
+            name: Some(skill.name.clone()),
+            display_title: Some(skill.name.clone()),
+            description: Some(skill.description.clone()),
+            skill_content: Some(skill.body.clone()),
+            additional_files_json: None,
+            enabled: Some(1),
+            version: Some(existing.version + 1),
+            updated_at: chrono::Utc::now().naive_utc(),
+            source_path: source_path.clone(),
+            category: skill.category.clone(),
+            requires_sandbox: Some(if skill.requires_sandbox { 1 } else { 0 }),
+            sandbox_config: sandbox_config_json.clone(),
+            execution_mode: Some(skill.execution_mode.clone().unwrap_or_else(|| "direct".to_string())),
+        };
 
-    diesel::insert_into(agent_skills::table)
-        .values(&new_skill)
-        .execute(&mut conn)
-        .map_err(|e| format!("Failed to insert skill: {}", e))?;
+        diesel::update(agent_skills::table.filter(agent_skills::id.eq(&existing.id)))
+            .set(&update)
+            .execute(&mut conn)
+            .map_err(|e| format!("Failed to update skill: {}", e))?;
+
+        // Delete old skill files before inserting new ones
+        diesel::delete(schema::skill_files::table.filter(schema::skill_files::skill_id.eq(&existing.id)))
+            .execute(&mut conn)
+            .ok();
+
+        existing.id
+    } else {
+        // Create new skill
+        let new_id = uuid::Uuid::new_v4().to_string();
+        let new_skill = NewAgentSkill {
+            id: new_id.clone(),
+            name: skill.name.clone(),
+            display_title: skill.name.clone(),
+            description: skill.description.clone(),
+            skill_content: skill.body.clone(),
+            additional_files_json: None,
+            enabled: 1,
+            version: 1,
+            created_at: chrono::Utc::now().naive_utc(),
+            updated_at: chrono::Utc::now().naive_utc(),
+            source_path,
+            category: skill.category.clone(),
+            requires_sandbox: if skill.requires_sandbox { 1 } else { 0 },
+            sandbox_config: sandbox_config_json,
+            execution_mode: skill.execution_mode.clone().unwrap_or_else(|| "direct".to_string()),
+        };
+
+        diesel::insert_into(agent_skills::table)
+            .values(&new_skill)
+            .execute(&mut conn)
+            .map_err(|e| format!("Failed to insert skill: {}", e))?;
+
+        new_id
+    };
 
     // Insert skill files
     for (relative_path, file_content) in loaded.files {
@@ -517,4 +558,61 @@ pub async fn update_agent_scope(
         .map_err(|e| format!("Failed to update agent scope: {}", e))?;
 
     Ok(())
+}
+
+// ==================== CLEANUP ====================
+
+/// Remove duplicate skills from the database, keeping only the most recently updated one
+#[tauri::command]
+pub async fn cleanup_duplicate_skills(state: State<'_, AppState>) -> Result<u32, String> {
+    use schema::agent_skills;
+    use std::collections::HashMap;
+
+    let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
+
+    // Get all skills
+    let all_skills: Vec<AgentSkill> = agent_skills::table
+        .order(agent_skills::updated_at.desc())
+        .load(&mut conn)
+        .map_err(|e| e.to_string())?;
+
+    // Group by name, keeping track of which to delete
+    let mut seen_names: HashMap<String, String> = HashMap::new(); // name -> id to keep
+    let mut ids_to_delete: Vec<String> = Vec::new();
+
+    for skill in all_skills {
+        if let Some(_existing_id) = seen_names.get(&skill.name) {
+            // This is a duplicate (older one since we sorted by updated_at desc)
+            ids_to_delete.push(skill.id);
+        } else {
+            // First occurrence (most recent), keep it
+            seen_names.insert(skill.name, skill.id);
+        }
+    }
+
+    let deleted_count = ids_to_delete.len() as u32;
+
+    // Delete duplicates
+    for id in ids_to_delete {
+        // Delete skill files first
+        diesel::delete(schema::skill_files::table.filter(schema::skill_files::skill_id.eq(&id)))
+            .execute(&mut conn)
+            .ok();
+
+        // Delete skill assignments
+        diesel::delete(
+            schema::agent_skill_assignments::table
+                .filter(schema::agent_skill_assignments::skill_id.eq(&id)),
+        )
+        .execute(&mut conn)
+        .ok();
+
+        // Delete the skill
+        diesel::delete(agent_skills::table.filter(agent_skills::id.eq(&id)))
+            .execute(&mut conn)
+            .ok();
+    }
+
+    log::info!("Cleaned up {} duplicate skills", deleted_count);
+    Ok(deleted_count)
 }

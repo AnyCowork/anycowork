@@ -1,0 +1,30 @@
+[package]
+name = "anycowork-tauri"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Tauri adapter for AnyCowork core library"
+repository.workspace = true
+
+[dependencies]
+# Core library
+anycowork-core = { path = "../anycowork-core" }
+
+# Tauri
+tauri = { version = "2.0.0", features = ["test"] }
+
+# Async runtime
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+dashmap = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

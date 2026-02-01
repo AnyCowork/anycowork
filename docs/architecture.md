@@ -8,8 +8,10 @@
 AnyCowork is a native desktop AI assistant platform built with **Tauri** and **Rust**. It provides:
 
 - **Native Performance**: Rust backend with minimal resource usage (**Optimized**)
+- **Platform Independence**: Core library (anycowork-core) runs on Desktop, CLI, Server, Mobile
 - **Smart AI**: Gemini 3 Pro via rig-core & MCP integration (**Smart**)
 - **Safe Execution**: Human-in-the-loop permission system (**Safe**)
+- **Sandboxed Tools**: Docker-based isolation for untrusted code execution
 - **Telegram Integration**: Multi-bot support with teloxide
 - **Local-First**: SQLite database with Diesel ORM
 
@@ -31,23 +33,40 @@ AnyCowork is a native desktop AI assistant platform built with **Tauri** and **R
                     Tauri IPC Commands
                            │
 ┌─────────────────────────────────────────────────────────────┐
-│                    APPLICATION LAYER                         │
+│                    ADAPTER LAYER                             │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │            Tauri Commands (lib.rs)                    │   │
-│  │  • Agent CRUD operations                             │   │
-│  │  • Chat message handling                             │   │
-│  │  • Telegram bot management                           │   │
-│  │  • Approval workflow                                 │   │
+│  │         anycowork-tauri (Platform Adapter)            │   │
+│  │  • Tauri Commands (IPC handlers)                     │   │
+│  │  • Permission Handler (UI-based approvals)           │   │
+│  │  • Event Bridge (Core → Frontend)                    │   │
+│  │  • Database Integration (Diesel + SQLite)            │   │
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
                            │
 ┌─────────────────────────────────────────────────────────────┐
-│                    SERVICE LAYER                             │
-│  ┌───────────┐  ┌───────────┐  ┌───────────┐               │
-│  │  Agent    │  │ Telegram  │  │  Events   │               │
-│  │  Loop     │  │  Manager  │  │  System   │               │
-│  │(agents.rs)│  │(telegram.rs)│ │(events.rs)│               │
-│  └───────────┘  └───────────┘  └───────────┘               │
+│                    CORE LIBRARY LAYER                        │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │         anycowork-core (Platform-Independent)         │   │
+│  │  ┌─────────────────┐  ┌─────────────────┐           │   │
+│  │  │ Agent System    │  │ Tool System     │           │   │
+│  │  │ - Coordinator   │  │ - BashTool      │           │   │
+│  │  │ - Planner       │  │ - FileTool      │           │   │
+│  │  │ - Router        │  │ - SearchTool    │           │   │
+│  │  │ - Executor      │  │ - OfficeTool    │           │   │
+│  │  └─────────────────┘  └─────────────────┘           │   │
+│  │  ┌─────────────────┐  ┌─────────────────┐           │   │
+│  │  │ Sandbox         │  │ Permissions     │           │   │
+│  │  │ - Docker        │  │ - Manager       │           │   │
+│  │  │ - WASM (future) │  │ - Policies      │           │   │
+│  │  │ - Native        │  │ - Cache         │           │   │
+│  │  └─────────────────┘  └─────────────────┘           │   │
+│  │  ┌─────────────────┐  ┌─────────────────┐           │   │
+│  │  │ Skills          │  │ Events          │           │   │
+│  │  │ - Loader        │  │ - Channel       │           │   │
+│  │  │ - Executor      │  │ - Subscriber    │           │   │
+│  │  │ - Registry      │  │                 │           │   │
+│  │  └─────────────────┘  └─────────────────┘           │   │
+│  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
                            │
 ┌─────────────────────────────────────────────────────────────┐
@@ -55,10 +74,11 @@ AnyCowork is a native desktop AI assistant platform built with **Tauri** and **R
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │              rig-core Framework                       │   │
 │  │  ┌──────────────────────────────────────────────┐    │   │
-│  │  │            OpenAI Client                      │    │   │
-│  │  │  • GPT-4, GPT-3.5 models                     │    │   │
+│  │  │  Provider Clients (OpenAI, Anthropic, etc.)  │    │   │
+│  │  │  • GPT-4, Claude, Gemini models              │    │   │
 │  │  │  • Streaming responses                       │    │   │
 │  │  │  • Tool/function calling                     │    │   │
+│  │  │  • PromptHook for approvals                  │    │   │
 │  │  └──────────────────────────────────────────────┘    │   │
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
@@ -81,14 +101,73 @@ AnyCowork is a native desktop AI assistant platform built with **Tauri** and **R
 
 ## Core Components
 
-### 1. Tauri Application (lib.rs)
+### 0. anycowork-core (Platform-Independent Library)
 
-**Purpose**: Main application entry point and IPC command definitions
+**Purpose**: Provide platform-agnostic agent functionality
+
+**Key Modules**:
+
+**Agent System** (`agent/`):
+- **Coordinator**: Orchestrates multi-agent workflows
+- **Planner**: Creates execution plans from user requests
+- **Router**: Routes tasks to appropriate agents
+- **Executor**: Executes agent tasks with tool support
+
+**Tool System** (`tools/`):
+- **BashTool**: Execute shell commands in sandbox
+- **FilesystemTool**: File operations (read, write, search)
+- **SearchTool**: Code and content search
+- **OfficeTool**: Document manipulation (future)
+
+**Sandbox System** (`sandbox/`):
+- **Sandbox trait**: Platform-agnostic execution interface
+- **DockerSandbox**: Isolated Docker container execution
+- **NativeSandbox**: Direct host execution (with permissions)
+
+**Permission System** (`permissions/`):
+- **PermissionHandler trait**: Platform-specific approval interface
+- **PermissionManager**: Caching and policy enforcement
+- **PermissionType**: Shell, Filesystem, Network permissions
+
+**Event System** (`events/`):
+- **EventChannel**: Broadcast channel for agent events
+- **AgentEvent**: Type-safe event definitions
+- **Platform-agnostic**: Adapters bridge to UI
+
+**Skills System** (`skills/`):
+- **SkillLoader**: Load skills from filesystem
+- **SkillParser**: Parse skill.yaml definitions
+- **SkillTool**: Execute skills in sandbox
+
+### 1. anycowork-tauri (Tauri Adapter)
+
+**Purpose**: Bridge anycowork-core to Tauri platform
+
+**Key Components**:
+
+**Commands** (`commands.rs`):
+- Tauri command implementations
+- Uses anycowork-core functionality
+- Registered in src-tauri/lib.rs
+
+**Permission Handler** (`permissions.rs`):
+- Implements PermissionHandler trait
+- Emits permission requests to frontend
+- Handles approval/rejection responses
+
+**Event Bridge** (`events.rs`):
+- Subscribes to anycowork-core events
+- Emits to Tauri frontend via window.emit()
+- Session-scoped event routing
+
+### 2. Tauri Application (src-tauri)
+
+**Purpose**: Application entry point and state management
 
 **Key Responsibilities**:
 - Initialize application state
-- Define Tauri commands for frontend communication
-- Manage shared state (database pool, bot manager, pending approvals)
+- Register Tauri commands from anycowork-tauri
+- Manage database connection pool
 - Window event handling
 
 **Application State**:
@@ -96,77 +175,11 @@ AnyCowork is a native desktop AI assistant platform built with **Tauri** and **R
 pub struct AppState {
     pub db_pool: DbPool,
     pub telegram_manager: TelegramBotManager,
-    pub pending_approvals: Arc<DashMap<String, oneshot::Sender<bool>>>,
+    pub core_coordinator: Arc<AgentCoordinator>, // from anycowork-core
 }
 ```
 
-**Command Categories**:
-- Agent management: `create_agent`, `get_agents`
-- Chat: `chat`
-- Telegram: `create_telegram_config`, `start_telegram_bot`, etc.
-- Approval: `approve_action`, `reject_action`
-
-### 2. Agent System (agents.rs)
-
-**Purpose**: Execute AI-powered conversations with tool support
-
-**Components**:
-- **AgentLoop**: Manages conversation state and AI interactions
-- **ExecutionJob**: Represents a running agent task
-- **ExecutionStep**: Individual tool execution within a job
-
-**Execution Flow**:
-```
-User Message → AgentLoop.run()
-                    ↓
-            Emit "Thinking" event
-                    ↓
-            Check for tool calls (e.g., "delete")
-                    ↓
-            [If tool needs approval]
-                    ↓
-            Emit ApprovalRequired → Wait for user response
-                    ↓
-            Execute tool or skip
-                    ↓
-            Stream AI response via rig-core
-                    ↓
-            Emit Token events (streaming)
-                    ↓
-            Emit JobCompleted
-```
-
-**Event Types**:
-- `JobStarted` - Agent begins processing
-- `Thinking` - Agent is processing
-- `ApprovalRequired` - Tool needs user approval
-- `StepApproved` / `StepRejected` - Approval result
-- `StepCompleted` - Tool execution finished
-- `Token` - Streaming response chunk
-- `JobCompleted` - Agent finished
-
-- `JobCompleted` - Agent finished
- 
- ### 3. Skills System (skills/)
- 
- **Purpose**: Extensible capabilities for agents
- 
- **Components**:
- - **SkillTool**: Tool wrapper for executing skills
- - **DockerSandbox**: Verification and isolation environment
- - **SkillLoader**: Loads skills from filesystem/marketplace
- 
- **Skill Structure**:
- - `skill.yaml`: Metadata (name, description, triggers)
- - `README.md`: User documentation
- - Source Files: Python scripts, Node.js scripts, etc.
- 
- **Execution Modes**:
- - **Sandbox**: Runs in isolated Docker container (Debian/Alpine)
- - **Flexible**: Uses Docker if available, falls back to direct
- - **Direct**: Runs on host (if permitted)
- 
- ### 4. Telegram Integration (telegram.rs)
+### 3. Telegram Integration (telegram.rs)
 
 **Purpose**: Manage multiple Telegram bot instances
 
@@ -178,27 +191,21 @@ User Message → AgentLoop.run()
 - Start/stop individual bots
 - Auto-start bots on application launch
 - Chat ID filtering for security
-- Integration with agent system
+- Integration with anycowork-core agent system
 
 **Bot Flow**:
 ```
 Telegram Message → teloxide Dispatcher
                         ↓
-                Check allowed chats
-                        ↓
-                Find linked agent
                         ↓
                 Create/get session
                         ↓
-                Execute via AgentLoop
+                Execute via anycowork-core AgentCoordinator
                         ↓
                 Send response to Telegram
 ```
 
-                Send response to Telegram
- ```
- 
- ### 5. Database Layer (database.rs, schema.rs, models.rs)
+### 4. Database Layer (database.rs, schema.rs, models/)
 
 **Purpose**: Persistent storage with Diesel ORM
 
@@ -206,6 +213,8 @@ Telegram Message → teloxide Dispatcher
 - `agents` - Agent configurations
 - `sessions` - Chat sessions
 - `telegram_configs` - Telegram bot settings
+- `mcp_servers` - MCP server configurations
+- `skills` - Skill definitions and metadata
 
 **Connection Pool**:
 ```rust
@@ -213,26 +222,6 @@ pub type DbPool = r2d2::Pool<ConnectionManager<SqliteConnection>>;
 ```
 
 **Migrations**: Managed via Diesel CLI, auto-run on startup
-
-**Migrations**: Managed via Diesel CLI, auto-run on startup
- 
- ### 6. Event System (events.rs)
-
-**Purpose**: Type-safe event definitions for frontend communication
-
-**Event Structures**:
-```rust
-pub enum AgentEvent {
-    JobStarted { job: ExecutionJob },
-    Thinking { message: String },
-    ApprovalRequired { job: ExecutionJob, step: ExecutionStep },
-    StepApproved { job: ExecutionJob, step: ExecutionStep },
-    StepRejected { job: ExecutionJob, step: ExecutionStep },
-    StepCompleted { job: ExecutionJob, step: ExecutionStep },
-    Token { content: String },
-    JobCompleted { job: ExecutionJob, message: String },
-}
-```
 
 ---
 
@@ -460,6 +449,28 @@ Pending → Running → (Waiting for Approval) → Completed/Failed
 ---
 
 ## Technology Stack
+
+### Workspace Structure
+
+The project uses a Cargo workspace with three main crates:
+
+1. **anycowork-core** (`crates/anycowork-core/`)
+   - Platform-independent core library
+   - Agent system, tools, sandbox, permissions, events, skills
+   - Can be used in CLI, server, mobile applications
+   - No platform-specific dependencies
+
+2. **anycowork-tauri** (`crates/anycowork-tauri/`)
+   - Tauri platform adapter
+   - Bridges anycowork-core to Tauri
+   - Implements platform-specific handlers
+   - Depends on anycowork-core
+
+3. **src-tauri** (Tauri application)
+   - Application entry point
+   - Database integration
+   - State management
+   - Depends on anycowork-tauri
 
 ### Backend (Rust)
 - **Framework**: Tauri 2.0

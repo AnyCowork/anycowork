@@ -1,0 +1,71 @@
+[workspace]
+members = [
+    "crates/anycowork-core",
+    "crates/anycowork-tauri",
+    "src-tauri",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["AnyCowork Team"]
+license = "MIT"
+repository = "https://github.com/AnyCowork/anycowork"
+
+[workspace.dependencies]
+# AI/Agent
+rig-core = { version = "0.29", features = ["derive"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+async-trait = "0.1"
+futures = "0.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+thiserror = "1"
+anyhow = "1"
+
+# Utilities
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+dashmap = "6"
+log = "0.4"
+
+# Schema/Validation
+schemars = "0.8"
+jsonschema = "0.19"
+
+# Templating
+minijinja = { version = "2.14", features = ["loader"] }
+
+# File processing
+walkdir = "2.5"
+zip = "2.2"
+tempfile = "3.24"
+
+# HTTP client
+reqwest = { version = "0.11", features = ["json"] }
+
+# Document processing
+calamine = "0.26"
+docx-rs = "0.4"
+pdf-extract = "0.7"
+csv = "1.3"
+
+# Crypto
+sha2 = "0.10"
+hex = "0.4"
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

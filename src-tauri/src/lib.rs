@@ -2,7 +2,6 @@ pub mod agents;
 pub mod commands;
 pub mod database;
 pub mod events;
-pub mod llm;
 pub mod mcp;
 pub mod models;
 pub mod permissions;
@@ -39,6 +38,9 @@ pub fn run() {
     // Setup DB
     let pool = database::establish_connection();
     database::run_migrations(&pool);
+
+    // Cleanup duplicate skills that may have been created before the fix
+    database::cleanup_duplicate_skills(&pool);
 
     // Create default agent if none exist
     database::ensure_default_agent(&pool);
@@ -142,6 +144,8 @@ pub fn run() {
             commands::check_docker_available,
             // Agent scope commands
             commands::update_agent_scope,
+            // Cleanup commands
+            commands::cleanup_duplicate_skills,
             // Window commands
             commands::toggle_devtools,
             commands::is_dev_mode,

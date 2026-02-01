@@ -1,0 +1,66 @@
+[package]
+name = "anycowork-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Platform-independent core library for AnyCowork AI assistant"
+repository.workspace = true
+
+[features]
+default = ["docker"]
+docker = []
+native = []
+
+[dependencies]
+# AI/Agent
+rig-core = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+chrono = { workspace = true }
+dashmap = { workspace = true }
+log = { workspace = true }
+
+# Schema/Validation
+schemars = { workspace = true }
+jsonschema = { workspace = true }
+
+# Templating
+minijinja = { workspace = true }
+
+# File processing
+walkdir = { workspace = true }
+zip = { workspace = true }
+tempfile = { workspace = true }
+
+# HTTP client
+reqwest = { workspace = true }
+
+# Document processing
+calamine = { workspace = true }
+docx-rs = { workspace = true }
+pdf-extract = { workspace = true }
+csv = { workspace = true }
+
+# Crypto
+sha2 = { workspace = true }
+hex = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["test-util", "macros"] }

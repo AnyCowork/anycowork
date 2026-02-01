@@ -402,18 +402,26 @@ pub async fn chat(
 
 #[tauri::command]
 pub async fn approve_action(state: State<'_, AppState>, step_id: String) -> Result<(), String> {
+    log::info!("approve_action called with step_id: {}", step_id);
+    
     // Try PermissionManager first
     state.permission_manager.approve_request(&step_id);
+    log::info!("Called permission_manager.approve_request");
 
     // Fallback to legacy pending_approvals if needed (optional)
     if let Some((_, tx)) = state.pending_approvals.remove(&step_id) {
+        log::info!("Found in pending_approvals, sending true");
         let _ = tx.send(true);
+    } else {
+        log::info!("Not found in pending_approvals");
     }
     Ok(())
 }
 
 #[tauri::command]
 pub async fn reject_action(state: State<'_, AppState>, step_id: String) -> Result<(), String> {
+    log::info!("reject_action called with step_id: {}", step_id);
+    
     // Try PermissionManager first
     state.permission_manager.reject_request(&step_id);
 

@@ -136,12 +136,18 @@ impl PermissionManager {
     }
 
     pub fn approve_request(&self, request_id: &str) {
+        log::info!("PermissionManager.approve_request called with id: {}", request_id);
+        log::info!("Pending requests: {:?}", self.pending_requests.iter().map(|e| e.key().clone()).collect::<Vec<_>>());
         if let Some((_, tx)) = self.pending_requests.remove(request_id) {
+            log::info!("Found request, sending true");
             let _ = tx.send(true);
+        } else {
+            log::warn!("Request {} not found in pending_requests", request_id);
         }
     }
 
     pub fn reject_request(&self, request_id: &str) {
+        log::info!("PermissionManager.reject_request called with id: {}", request_id);
         if let Some((_, tx)) = self.pending_requests.remove(request_id) {
             let _ = tx.send(false);
         }

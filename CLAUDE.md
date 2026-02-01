@@ -11,18 +11,64 @@ This file provides guidance to Claude Code (claude.ai/code) and other AI assista
 ## Architecture Summary
 
 ```
-AnyCowork Desktop (Tauri)
+┌─────────────────────────────────────────────────────────────┐
+│                    Platform Adapters                         │
+├──────────────┬──────────────┬───────────────┬───────────────┤
+│ Tauri Desktop│   CLI        │  Server/API   │ Tauri Mobile  │
+│ (current)    │  (future)    │  (future)     │ (future)      │
+└──────┬───────┴──────┬───────┴───────┬───────┴───────┬───────┘
+       │              │               │               │
+       └──────────────┴───────┬───────┴───────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     anycowork-core                           │
+│  Platform-Independent Agent Library                          │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
+│  │ Agent System    │  │ Tool System     │  │ Skills       │ │
+│  │ - Coordinator   │  │ - BashTool      │  │ - Loader     │ │
+│  │ - Planner       │  │ - FileTool      │  │ - Executor   │ │
+│  │ - Router        │  │ - SearchTool    │  │ - Registry   │ │
+│  │ - Executor      │  │ - OfficeTool    │  │              │ │
+│  └─────────────────┘  └─────────────────┘  └──────────────┘ │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
+│  │ Sandbox         │  │ Permissions     │  │ Events       │ │
+│  │ - Docker        │  │ - Manager       │  │ - Channel    │ │
+│  │ - WASM (future) │  │ - Policies      │  │ - Subscriber │ │
+│  │ - Native        │  │ - Cache         │  │              │ │
+│  └─────────────────┘  └─────────────────┘  └──────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                        rig-core                              │
+│  - Provider clients (OpenAI, Anthropic, Gemini, Ollama...)  │
+│  - Tool trait & ToolSet                                      │
+│  - PromptHook for approvals                                  │
+│  - Multi-turn agent execution                                │
+│  - Streaming                                                 │
+└─────────────────────────────────────────────────────────────┘
+
+AnyCowork Desktop (Tauri) - Current Implementation
 ├── Frontend (React + Vite)
 │   ├── UI Components (shadcn/ui)
 │   ├── State Management (React Query)
 │   └── Tauri IPC Client
 │
-├── Backend (Rust + Tauri)
+├── Tauri Adapter (anycowork-tauri)
 │   ├── Tauri Commands (IPC handlers)
-│   ├── Agent System (rig-core)
-│   ├── Telegram Bot (teloxide)
-│   ├── Database (Diesel + SQLite)
-│   └── Event System
+│   ├── Permission Handler (UI-based approvals)
+│   ├── Event Bridge (Core → Frontend)
+│   └── Database Integration (Diesel + SQLite)
+│
+├── Core Library (anycowork-core)
+│   ├── Agent System (Coordinator, Planner, Router)
+│   ├── Tool System (Bash, Filesystem, Search, Office)
+│   ├── Sandbox System (Docker, Native)
+│   ├── Permission System (Platform-agnostic)
+│   ├── Event System (Platform-agnostic)
+│   └── Skills System (Loader, Executor)
 │
 └── Storage
     └── SQLite Database (local)
@@ -30,8 +76,10 @@ AnyCowork Desktop (Tauri)
 
 ### Technology Stack
 
+- **Core Library**: anycowork-core (Platform-independent Rust library)
 - **Backend**: Rust, Tauri 2.0, Diesel ORM
 - **AI**: OpenAI GPT via rig-core
+- **Sandbox**: Docker (isolation), Native (fallback)
 - **Telegram**: teloxide (async Telegram bot framework)
 - **Frontend**: React 19, Vite, TypeScript, Tailwind CSS
 - **UI**: shadcn/ui, Radix UI primitives
@@ -41,16 +89,30 @@ AnyCowork Desktop (Tauri)
 
 ```
 .
+├── crates/                     # Rust workspace crates
+│   ├── anycowork-core/         # Platform-independent core library
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs
+│   │       ├── agent/          # Multi-agent system
+│   │       ├── tools/          # Rig Tool implementations
+│   │       ├── sandbox/        # Execution environments
+│   │       ├── skills/         # Skill system
+│   │       ├── permissions/    # Permission system
+│   │       ├── events/         # Event system
+│   │       └── config.rs
+│   │
+│   └── anycowork-tauri/        # Tauri platform adapter
+│       ├── Cargo.toml
+│       └── src/
+│           ├── lib.rs
+│           ├── commands.rs     # Tauri commands
+│           ├── events.rs       # Tauri event emission
+│           └── permissions.rs  # Tauri permission handler
+│
 ├── src/                        # React frontend source
 │   ├── routes/                 # Page components (react-router)
-│   │   ├── HomePage.tsx
-│   │   ├── ChatPage.tsx
-│   │   ├── AgentsPage.tsx
-│   │   ├── TasksPage.tsx
-│   │   ├── SettingsPage.tsx
-│   │   └── ...
 │   ├── components/             # Shared UI components
-│   │   └── ui/                 # shadcn/ui components
 │   ├── hooks/                  # React hooks
 │   ├── lib/
 │   │   ├── anycowork-api.ts    # Tauri IPC client
@@ -60,30 +122,27 @@ AnyCowork Desktop (Tauri)
 │   ├── App.tsx                 # Router setup
 │   └── index.html
 │
-├── src-tauri/                  # Rust backend
+├── src-tauri/                  # Tauri app entry point
 │   ├── src/
 │   │   ├── lib.rs              # Main app, Tauri commands, AppState
 │   │   ├── main.rs             # Entry point
-│   │   ├── agents/             # AI Agent System
-│   │   │   ├── mod.rs          # Agent Worker Loop
-│   │   │   ├── coordinator.rs  # Agent Coordinator
-│   │   │   └── planner.rs      # Planning Agent
-│   │   ├── telegram.rs         # Telegram bot manager (teloxide)
 │   │   ├── database.rs         # Database connection pool
-│   │   ├── models.rs           # Diesel models
-│   │   ├── schema.rs           # Diesel schema
-│   │   └── events.rs           # Event types for frontend
+│   │   ├── models/             # Diesel models
+│   │   └── schema.rs           # Diesel schema
 │   ├── migrations/             # Diesel migrations
+│   ├── skills/                 # Skill definitions
 │   ├── icons/                  # App icons
 │   ├── Cargo.toml
 │   └── tauri.conf.json
 │
 ├── docs/                       # Documentation
+│   ├── anycowork-core-plan.md # Core library architecture plan
 │   ├── architecture.md         # System architecture
 │   ├── build.md                # Build instructions
 │   └── ui-design.md            # UI design guidelines
 │
 ├── public/                     # Static assets
+├── Cargo.toml                  # Workspace root
 ├── package.json
 ├── vite.config.ts
 ├── tailwind.config.ts
@@ -104,13 +163,18 @@ npm run tauri dev
 ### Backend (Rust + Tauri)
 
 ```bash
-cd src-tauri
-
-# Build
+# Build entire workspace
 cargo build
+
+# Build specific crate
+cargo build -p anycowork-core
+cargo build -p anycowork-tauri
 
 # Run tests
 cargo test
+
+# Run tests for specific crate
+cargo test -p anycowork-core
 
 # Format code
 cargo fmt
@@ -155,16 +219,31 @@ diesel migration revert
 
 ## Key Files to Know
 
-### Backend (Most Important)
+### Core Library (anycowork-core)
 
-- `src-tauri/src/lib.rs` - Main app logic, all Tauri commands defined here
-- `src-tauri/src/agents/mod.rs` - Agent Worker Loop & Tool Execution
-- `src-tauri/src/agents/coordinator.rs` - Agent Coordinator (Plan -> Execute)
-- `src-tauri/src/telegram.rs` - Telegram bot manager using teloxide
+- `crates/anycowork-core/src/lib.rs` - Core library entry point
+- `crates/anycowork-core/src/agent/coordinator.rs` - Agent coordination logic
+- `crates/anycowork-core/src/agent/planner.rs` - Planning agent
+- `crates/anycowork-core/src/tools/` - Rig Tool implementations (bash, filesystem, etc.)
+- `crates/anycowork-core/src/sandbox/` - Sandbox abstractions (Docker, native)
+- `crates/anycowork-core/src/permissions/` - Permission system
+- `crates/anycowork-core/src/events/` - Platform-agnostic event system
+- `crates/anycowork-core/src/skills/` - Skill loading and execution
+
+### Tauri Adapter (anycowork-tauri)
+
+- `crates/anycowork-tauri/src/lib.rs` - Tauri adapter entry point
+- `crates/anycowork-tauri/src/commands.rs` - Tauri command implementations
+- `crates/anycowork-tauri/src/events.rs` - Event bridge to frontend
+- `crates/anycowork-tauri/src/permissions.rs` - Tauri permission handler
+
+### Backend (Tauri App)
+
+- `src-tauri/src/lib.rs` - Main app logic, AppState, command registration
+- `src-tauri/src/main.rs` - Application entry point
 - `src-tauri/src/database.rs` - Database connection pool setup
-- `src-tauri/src/models.rs` - Diesel models (Agent, Message, TelegramConfig)
+- `src-tauri/src/models/` - Diesel models (Agent, Session, etc.)
 - `src-tauri/src/schema.rs` - Diesel table definitions
-- `src-tauri/src/events.rs` - Event types emitted to frontend
 
 ### Frontend (Most Important)
 
@@ -175,7 +254,10 @@ diesel migration revert
 
 ### Configuration
 
-- `src-tauri/Cargo.toml` - Rust dependencies
+- `Cargo.toml` - Workspace root configuration
+- `crates/anycowork-core/Cargo.toml` - Core library dependencies
+- `crates/anycowork-tauri/Cargo.toml` - Tauri adapter dependencies
+- `src-tauri/Cargo.toml` - Tauri app dependencies
 - `src-tauri/tauri.conf.json` - Tauri configuration
 - `package.json` - Frontend dependencies
 - `.env` - Environment variables (API keys)
@@ -242,25 +324,57 @@ listen("session:xxx", (event) => { ... });
 
 ## Adding New Features
 
-### Adding a New Tauri Command
+### Adding Core Library Features
 
-1. Define the command in `src/lib.rs`:
+1. Implement in `crates/anycowork-core/src/`:
 ```rust
-#[tauri::command]
-async fn my_command(state: State<'_, AppState>, param: String) -> Result<MyResult, String> {
-    // Implementation
+// Example: New tool in crates/anycowork-core/src/tools/my_tool.rs
+use rig::tool::{Tool, ToolDefinition};
+
+pub struct MyTool { /* ... */ }
+
+impl Tool for MyTool {
+    const NAME: &'static str = "my_tool";
+    // ... implementation
 }
 ```
 
-2. Register in `invoke_handler`:
+2. Export from module:
+```rust
+// crates/anycowork-core/src/tools/mod.rs
+pub mod my_tool;
+pub use my_tool::MyTool;
+```
+
+3. Use in Tauri adapter:
+```rust
+// crates/anycowork-tauri/src/commands.rs
+use anycowork_core::tools::MyTool;
+```
+
+### Adding a New Tauri Command
+
+1. Define the command in `crates/anycowork-tauri/src/commands.rs`:
+```rust
+#[tauri::command]
+pub async fn my_command(
+    state: State<'_, AppState>,
+    param: String
+) -> Result<MyResult, String> {
+    // Use anycowork-core functionality
+    Ok(result)
+}
+```
+
+2. Register in `src-tauri/src/lib.rs`:
 ```rust
 .invoke_handler(tauri::generate_handler![
     // ... existing commands
-    my_command,
+    anycowork_tauri::commands::my_command,
 ])
 ```
 
-3. Add to frontend API (`frontend/lib/anycowork-api.ts`):
+3. Add to frontend API (`lib/anycowork-api.ts`):
 ```typescript
 myCommand: async (param: string) => {
     return invoke<MyResult>('my_command', { param });
@@ -353,13 +467,17 @@ pub struct MyModel { ... }
 When working with this codebase:
 
 1. **Read this file first** to understand project structure
-2. **Check existing patterns** before adding new code
-3. **Use async/await** in Rust for all I/O
-4. **Use React Query** for data fetching in frontend
-5. **Follow UI guidelines** in `docs/ui-design.md`
-6. **Test both frontend and backend** after changes
-7. **Never commit API keys** or secrets
-8. **Update types** in both Rust and TypeScript when changing APIs
+2. **Understand the workspace structure**: anycowork-core (platform-independent) → anycowork-tauri (adapter) → src-tauri (app)
+3. **Core logic goes in anycowork-core** for platform independence
+4. **Platform-specific code goes in anycowork-tauri** for Tauri integration
+5. **Check existing patterns** before adding new code
+6. **Use async/await** in Rust for all I/O
+7. **Use React Query** for data fetching in frontend
+8. **Follow UI guidelines** in `docs/ui-design.md`
+9. **Test both frontend and backend** after changes
+10. **Never commit API keys** or secrets
+11. **Update types** in both Rust and TypeScript when changing APIs
+12. **See docs/anycowork-core-plan.md** for detailed architecture plan
 
 ## Version History
 

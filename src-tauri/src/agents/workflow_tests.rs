@@ -309,8 +309,6 @@ mod daily_workflow_tests {
 
 #[cfg(test)]
 mod interaction_patterns {
-    use super::*;
-
     #[test]
     fn test_optimal_interaction_levels() {
         // Define optimal interaction levels for different request types
