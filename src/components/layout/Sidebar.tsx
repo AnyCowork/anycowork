@@ -39,8 +39,8 @@ const workspaceNavigation: NavItem[] = [
 const studioNavigation: NavItem[] = [
   { name: "Agents", href: "/agents", icon: Bot },
   { name: "Skills", href: "/skills", icon: Hammer },
-  { name: "MCP Servers", href: "/mcp", icon: Server },
-  // { name: "Connections", href: "/connections", icon: Users }, // Federation - Not fully implemented yet
+  { name: "Apps", href: "/apps", icon: LayoutDashboard },
+  { name: "Connectors", href: "/mcp", icon: Server },
 ];
 
 const bottomNavigation: NavItem[] = [

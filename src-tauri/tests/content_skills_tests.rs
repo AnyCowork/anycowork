@@ -1,4 +1,4 @@
-use anycowork::skills::loader::load_skill_from_directory;
+use anyagents::skills::loader::load_skill_from_directory;
 use std::fs;
 use std::path::PathBuf;
 

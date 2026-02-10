@@ -1,9 +1,9 @@
 use anycowork::commands::agents::{chat_internal, create_agent};
 use anycowork::commands::sessions::create_session;
-use anycowork::database::create_test_pool;
-use anycowork::models::{NewAgentSkill, NewAgentSkillAssignment};
-use anycowork::permissions::PermissionManager;
-use anycowork::schema::{agent_skill_assignments, agent_skills};
+use anyagents::database::create_test_pool;
+use anyagents::models::{NewAgentSkill, NewAgentSkillAssignment};
+use anyagents::permissions::PermissionManager;
+use anyagents::schema::{agent_skill_assignments, agent_skills};
 use anycowork::AppState;
 use diesel::prelude::*;
 use std::sync::Arc;
@@ -45,7 +45,7 @@ async fn setup_app_and_agent(skill_name: &str, skill_content: &str, requires_san
     
     // Update workspace_path in DB manually
     let mut conn = pool.get().unwrap();
-    use anycowork::schema::agents;
+    use anyagents::schema::agents;
     use diesel::prelude::*;
     diesel::update(agents::table.filter(agents::id.eq(&agent.id)))
         .set(agents::workspace_path.eq(&workspace_path))
@@ -205,14 +205,14 @@ async fn test_e2e_skill_knowledge_read() {
     // Check DB
     let pool = state.db_pool.clone();
     let mut found = false;
-    use anycowork::schema::messages::dsl::{messages, session_id as session_id_col, role, created_at};
+    use anyagents::schema::messages::dsl::{messages, session_id as session_id_col, role, created_at};
     
     for _ in 0..60 {
         let mut conn = pool.get().unwrap();
         let msgs = messages
             .filter(session_id_col.eq(&session_id))
             .order(created_at.asc())
-            .load::<anycowork::models::Message>(&mut conn)
+            .load::<anyagents::models::Message>(&mut conn)
             .unwrap();
             
         for msg in msgs {
@@ -276,14 +276,14 @@ async fn test_e2e_skill_error_handling() {
     // Check DB for assistant mentioning error
     let pool = state.db_pool.clone();
     let mut found = false;
-    use anycowork::schema::messages::dsl::{messages, session_id as session_id_col, role, created_at};
+    use anyagents::schema::messages::dsl::{messages, session_id as session_id_col, role, created_at};
     
     for _ in 0..60 {
         let mut conn = pool.get().unwrap();
         let msgs = messages
             .filter(session_id_col.eq(&session_id))
             .order(created_at.asc())
-            .load::<anycowork::models::Message>(&mut conn)
+            .load::<anyagents::models::Message>(&mut conn)
             .unwrap();
             
         for msg in msgs {
@@ -415,14 +415,14 @@ async fn test_e2e_skill_sandbox_isolation() {
     // 4. Verify isolation
     let pool = state.db_pool.clone();
     let mut proved_isolation = false;
-    use anycowork::schema::messages::dsl::{messages, session_id as session_id_col, role, created_at};
+    use anyagents::schema::messages::dsl::{messages, session_id as session_id_col, role, created_at};
     
     for _ in 0..60 {
         let mut conn = pool.get().unwrap();
         let msgs = messages
             .filter(session_id_col.eq(&session_id))
             .order(created_at.asc())
-            .load::<anycowork::models::Message>(&mut conn)
+            .load::<anyagents::models::Message>(&mut conn)
             .unwrap();
             
         for msg in msgs {

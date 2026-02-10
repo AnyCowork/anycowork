@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Wrench, Plus, Loader2, Download, CheckCircle2, FolderOpen, FileArchive, Search, Shield, Trash2, Eye, ArrowUpDown, Filter, Box, Zap, Container } from "lucide-react";
 import { anycoworkApi, AgentSkill, MarketplaceSkill, SkillFile } from "@/lib/anycowork-api";
 import { useState, useMemo } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/useToast";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -228,24 +228,24 @@ export default function SkillsPage() {
   // Apply status and category filters
   const statusFilteredSkills = useMemo(() => {
     let filtered = filteredInstalled;
-    
+
     if (filterStatus === 'enabled') {
       filtered = filtered.filter(s => s.enabled === 1);
     } else if (filterStatus === 'disabled') {
       filtered = filtered.filter(s => s.enabled === 0);
     }
-    
+
     if (filterCategory !== 'all') {
       filtered = filtered.filter(s => s.category === filterCategory);
     }
-    
+
     return filtered;
   }, [filteredInstalled, filterStatus, filterCategory]);
 
   // Sort skills
   const sortedSkills = useMemo(() => {
     const sorted = [...statusFilteredSkills];
-    
+
     switch (sortBy) {
       case 'name':
         sorted.sort((a, b) => a.name.localeCompare(b.name));
@@ -257,7 +257,7 @@ export default function SkillsPage() {
         sorted.sort((a, b) => (a.category || 'General').localeCompare(b.category || 'General'));
         break;
     }
-    
+
     return sorted;
   }, [statusFilteredSkills, sortBy]);
 
@@ -378,7 +378,7 @@ export default function SkillsPage() {
                 Marketplace ({filteredMarketplace.length})
               </TabsTrigger>
             </TabsList>
-            
+
             <div className="flex items-center gap-2">
               {/* Search */}
               <div className="relative w-64">
@@ -478,7 +478,7 @@ export default function SkillsPage() {
                         const toolCount = countTools(skill.skill_content);
                         const execMode = getExecutionModeBadge(skill.execution_mode);
                         const ExecutionIcon = execMode.icon;
-                        
+
                         return (
                           <Card
                             key={skill.id}
@@ -529,7 +529,7 @@ export default function SkillsPage() {
                                     </Tooltip>
                                   </TooltipProvider>
                                 )}
-                                
+
                                 {/* Execution Mode */}
                                 <TooltipProvider>
                                   <Tooltip>
@@ -715,8 +715,8 @@ export default function SkillsPage() {
                               <Badge variant="outline" className="shrink-0">{file.file_type}</Badge>
                               <span className="text-sm truncate">{file.relative_path}</span>
                             </div>
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="sm"
                               onClick={() => {
                                 setSelectedFile(file);

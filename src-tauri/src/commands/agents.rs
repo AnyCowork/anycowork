@@ -1,8 +1,12 @@
-use crate::models::{Agent, AgentDto, NewAgent};
-use crate::schema;
+use anyagents::models::{Agent, AgentDto, NewAgent};
+use anyagents::schema;
 use crate::AppState;
 use diesel::prelude::*;
 use tauri::State;
+use std::sync::Arc;
+use tauri::{Runtime, WebviewWindow};
+use anyagents::agents::AgentLoop;
+use crate::events::TauriAgentObserver;
 
 #[tauri::command]
 pub async fn create_agent(
@@ -11,7 +15,7 @@ pub async fn create_agent(
     description: String,
     system_prompt: String,
 ) -> Result<AgentDto, String> {
-    use schema::agents;
+    use anyagents::schema::agents;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -69,7 +73,7 @@ pub async fn create_agent(
 
 #[tauri::command]
 pub async fn get_agents(state: State<'_, AppState>) -> Result<Vec<AgentDto>, String> {
-    use schema::agents::dsl::*;
+    use anyagents::schema::agents::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
     let results = agents.load::<Agent>(&mut conn).map_err(|e| e.to_string())?;
@@ -81,9 +85,9 @@ pub async fn get_agents(state: State<'_, AppState>) -> Result<Vec<AgentDto>, Str
 pub async fn update_agent(
     state: State<'_, AppState>,
     agent_id: String,
-    data: crate::models::AgentUpdateDto,
+    data: anyagents::models::AgentUpdateDto,
 ) -> Result<AgentDto, String> {
-    use schema::agents::dsl::*;
+    use anyagents::schema::agents::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -135,8 +139,8 @@ pub async fn update_agent(
             agent.skills = Some(s.join(", "));
 
             // Sync agent_skill_assignments
-            use crate::models::NewAgentSkillAssignment;
-            use schema::agent_skill_assignments::dsl::{agent_skill_assignments, agent_id as col_agent_id};
+            use anyagents::models::NewAgentSkillAssignment;
+            use anyagents::schema::agent_skill_assignments::dsl::{agent_skill_assignments, agent_id as col_agent_id};
 
             // 1. Delete existing assignments for this agent
             diesel::delete(agent_skill_assignments.filter(col_agent_id.eq(&agent_id)))
@@ -216,8 +220,8 @@ async fn sync_agent_telegram_config(
     agent_id: &str,
     platform_configs_json: &str,
 ) -> Result<(), String> {
-    use crate::models::{NewTelegramConfig, TelegramConfig};
-    use schema::telegram_configs;
+    use anyagents::models::{NewTelegramConfig, TelegramConfig};
+    use anyagents::schema::telegram_configs;
 
     // Parse platform_configs
     let platform_configs: serde_json::Value =
@@ -327,7 +331,6 @@ async fn sync_agent_telegram_config(
     Ok(())
 }
 
-use tauri::Runtime;
 
 pub async fn chat_internal<R: Runtime>(
     window: tauri::WebviewWindow<R>,
@@ -337,10 +340,10 @@ pub async fn chat_internal<R: Runtime>(
     mode: Option<String>,
     model: Option<String>,
 ) -> Result<String, String> {
-    use crate::models::Session;
-    use schema::agents::dsl::agents;
-    use schema::sessions::dsl::id as session_id_col;
-    use schema::sessions::dsl::sessions;
+    use anyagents::models::Session;
+    use anyagents::schema::agents::dsl::agents;
+    use anyagents::schema::sessions::dsl::id as session_id_col;
+    use anyagents::schema::sessions::dsl::sessions;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -357,8 +360,8 @@ pub async fn chat_internal<R: Runtime>(
         .map_err(|_| "Agent not found".to_string())?;
 
     // 3. Save User Message
-    use crate::models::NewMessage;
-    use schema::messages;
+    use anyagents::models::NewMessage;
+    use anyagents::schema::messages;
     let user_msg = NewMessage {
         id: uuid::Uuid::new_v4().to_string(),
         role: "user".to_string(),
@@ -373,7 +376,7 @@ pub async fn chat_internal<R: Runtime>(
         .map_err(|e| e.to_string())?;
 
     // 4. Start Background Task
-    crate::agents::start_chat_task(
+    start_chat_task(
         agent_record,
         message,
         session_id,
@@ -427,8 +430,8 @@ pub async fn reject_action(state: State<'_, AppState>, step_id: String) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::create_test_pool;
-    use crate::permissions::PermissionManager;
+    use anyagents::database::create_test_pool;
+    use anyagents::permissions::PermissionManager;
     use tauri::test::mock_builder;
     use tauri::Manager;
 
@@ -467,4 +470,37 @@ mod tests {
         assert_eq!(agents.len(), 1);
         assert_eq!(agents[0].id, agent.id);
     }
+}
+
+pub fn start_chat_task<R: Runtime>(
+    agent: Agent,
+    message: String,
+    session_id: String,
+    window: WebviewWindow<R>,
+    pending_approvals: Arc<dashmap::DashMap<String, tokio::sync::oneshot::Sender<bool>>>,
+    permission_manager: Arc<anyagents::permissions::PermissionManager>,
+    db_pool: anyagents::database::DbPool,
+    _mode: String,
+    model: Option<String>,
+) {
+    let observer = Arc::new(TauriAgentObserver { window });
+    let job_id = uuid::Uuid::new_v4().to_string();
+
+    tauri::async_runtime::spawn(async move {
+        let mut loop_instance = AgentLoop::new(&agent, db_pool.clone()).await;
+        loop_instance.session_id = session_id;
+        
+        if let Some(m) = model {
+             loop_instance.model = m;
+        }
+
+        loop_instance.run(
+            message,
+            observer,
+            job_id,
+            pending_approvals,
+            permission_manager,
+            db_pool
+        ).await;
+    });
 }

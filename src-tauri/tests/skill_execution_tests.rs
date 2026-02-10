@@ -1,8 +1,8 @@
-use anycowork::agents::AgentLoop;
-use anycowork::database::{create_test_pool, DbPool};
-use anycowork::models::{Agent, NewAgent, NewAgentSkillAssignment};
-use anycowork::schema::{agent_skill_assignments, agent_skills, agents};
-use anycowork::skills::loader::load_skill_from_directory;
+use anyagents::agents::AgentLoop;
+use anyagents::database::{create_test_pool, DbPool};
+use anyagents::models::{Agent, NewAgent, NewAgentSkillAssignment};
+use anyagents::schema::{agent_skill_assignments, agent_skills, agents};
+use anyagents::skills::loader::load_skill_from_directory;
 use diesel::prelude::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -76,7 +76,7 @@ fn load_and_assign_skill(pool: &DbPool, agent_id: &str, skill_dirname: &str, tar
     let sandbox_config_json = loaded.skill.sandbox_config.map(|c| serde_json::to_string(&c).unwrap());
 
     // Insert Skill
-    let new_skill = anycowork::models::NewAgentSkill {
+    let new_skill = anyagents::models::NewAgentSkill {
         id: skill_id.clone(),
         name: loaded.skill.name.clone(),
         display_title: loaded.skill.name.clone(),
@@ -112,11 +112,11 @@ fn load_and_assign_skill(pool: &DbPool, agent_id: &str, skill_dirname: &str, tar
         .expect("Failed to assign skill");
         
     // Also insert skill files
-    use anycowork::schema::skill_files;
+    use anyagents::schema::skill_files;
     let mut new_files = Vec::new();
     
     for (rel_path, content) in &loaded.files {
-        new_files.push(anycowork::models::NewSkillFile {
+        new_files.push(anyagents::models::NewSkillFile {
             id: Uuid::new_v4().to_string(),
             skill_id: skill_id.clone(),
             relative_path: rel_path.clone(),
@@ -166,7 +166,7 @@ async fn run_agent_skill_test(skill_dirname: &str, prompt: &str) {
     load_and_assign_skill(&pool, &agent.id, skill_dirname, Some(temp_dir.path()));
     
     // Initialize Loop
-    let mut loop_runner = AgentLoop::<tauri::test::MockRuntime>::new(&agent, pool.clone()).await;
+    let mut loop_runner = AgentLoop::new(&agent, pool.clone()).await;
     
     let app = tauri::test::mock_builder()
         .build(tauri::generate_context!())
@@ -176,7 +176,7 @@ async fn run_agent_skill_test(skill_dirname: &str, prompt: &str) {
         .build()
         .unwrap();
     
-    let permission_manager = Arc::new(anycowork::permissions::PermissionManager::new());
+    let permission_manager = Arc::new(anyagents::permissions::PermissionManager::new());
     
     // Auto-approve permissions
     let pm_clone = permission_manager.clone();
@@ -204,9 +204,15 @@ async fn run_agent_skill_test(skill_dirname: &str, prompt: &str) {
     // To properly test "execution" via LLM, we normally need the LLM to call the tool.
     // We can verify this via side effects (files created) or logs.
     
+
+    struct MockObserver;
+    impl anyagents::events::AgentObserver for MockObserver {
+        fn emit(&self, _: &str, _: serde_json::Value) -> Result<(), String> { Ok(()) }
+    }
+    
     loop_runner.run(
         prompt.to_string(),
-        window,
+        std::sync::Arc::new(MockObserver),
         Uuid::new_v4().to_string(),
         pending_approvals,
         permission_manager,
@@ -230,9 +236,9 @@ async fn run_agent_skill_test(skill_dirname: &str, prompt: &str) {
 
 #[tokio::test]
 async fn test_skill_tool_local_execution() {
-    use anycowork::models::ParsedSkill;
-    use anycowork::skills::{SkillTool, loader::LoadedSkill};
-    use anycowork::tools::{Tool, ToolContext};
+    use anyagents::models::ParsedSkill;
+    use anyagents::skills::{SkillTool, loader::LoadedSkill};
+    use anyagents::tools::{Tool, ToolContext};
     
     // Create a dummy skill that touches a file
     let parsed = ParsedSkill {
@@ -257,9 +263,9 @@ async fn test_skill_tool_local_execution() {
     let tool = SkillTool::new(loaded, cwd.clone(), "direct".to_string());
     
     // Create Context (dummy)
-    let ctx: ToolContext<tauri::test::MockRuntime> = ToolContext {
-        permissions: std::sync::Arc::new(anycowork::permissions::PermissionManager::new()),
-        window: None,
+    let ctx: ToolContext = ToolContext {
+        permissions: std::sync::Arc::new(anyagents::permissions::PermissionManager::new()),
+        observer: None,
         session_id: "test".to_string(),
     };
     
@@ -281,9 +287,9 @@ async fn test_skill_tool_local_execution() {
 
 #[tokio::test]
 async fn test_skill_tool_read_content() {
-    use anycowork::models::ParsedSkill;
-    use anycowork::skills::{SkillTool, loader::LoadedSkill};
-    use anycowork::tools::{Tool, ToolContext};
+    use anyagents::models::ParsedSkill;
+    use anyagents::skills::{SkillTool, loader::LoadedSkill};
+    use anyagents::tools::{Tool, ToolContext};
     
     let parsed = ParsedSkill {
         name: "read-skill".to_string(),
@@ -306,9 +312,9 @@ async fn test_skill_tool_read_content() {
     let cwd = temp_dir.path().to_path_buf();
     let tool = SkillTool::new(loaded, cwd, "flexible".to_string());
     
-    let ctx: ToolContext<tauri::test::MockRuntime> = ToolContext {
-        permissions: std::sync::Arc::new(anycowork::permissions::PermissionManager::new()),
-        window: None,
+    let ctx: ToolContext = ToolContext {
+        permissions: std::sync::Arc::new(anyagents::permissions::PermissionManager::new()),
+        observer: None,
         session_id: "test".to_string(),
     };
     

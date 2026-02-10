@@ -1,13 +1,12 @@
-use crate::models::mcp_server::{McpServer, McpServerDto, McpServerUpdateDto, McpTemplateDto, NewMcpServer};
-use crate::models::{Agent, AgentDto};
-use crate::schema;
+use anyagents::models::mcp_server::{McpServer, McpServerDto, McpServerUpdateDto, McpTemplateDto, NewMcpServer};
+use anyagents::models::{Agent, AgentDto};
 use crate::AppState;
 use diesel::prelude::*;
 use tauri::State;
 
 #[tauri::command]
 pub async fn get_mcp_servers(state: State<'_, AppState>) -> Result<Vec<McpServerDto>, String> {
-    use schema::mcp_servers::dsl::*;
+    use anyagents::schema::mcp_servers::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
     let results = mcp_servers
@@ -23,7 +22,7 @@ pub async fn create_mcp_server(
     data: McpServerUpdateDto,
     template_id: Option<String>,
 ) -> Result<McpServerDto, String> {
-    use schema::mcp_servers;
+    use anyagents::schema::mcp_servers;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -67,7 +66,7 @@ pub async fn update_mcp_server(
     id: String,
     data: McpServerUpdateDto,
 ) -> Result<McpServerDto, String> {
-    use schema::mcp_servers::dsl::{mcp_servers, id as id_col, name, server_type, command, args, env, url, is_enabled, updated_at};
+    use anyagents::schema::mcp_servers::dsl::{mcp_servers, id as id_col, name, server_type, command, args, env, url, is_enabled, updated_at};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -119,7 +118,7 @@ pub async fn update_mcp_server(
 
 #[tauri::command]
 pub async fn delete_mcp_server(state: State<'_, AppState>, id: String) -> Result<(), String> {
-    use schema::mcp_servers::dsl::{mcp_servers, id as id_col};
+    use anyagents::schema::mcp_servers::dsl::{mcp_servers, id as id_col};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -184,12 +183,12 @@ pub async fn add_mcp_to_agent(
     agent_id: String,
     mcp_server_id: String,
 ) -> Result<AgentDto, String> {
-    use schema::agents::dsl::{agents, id as agent_id_col, mcp_servers as mcp_servers_col};
+    use anyagents::schema::agents::dsl::{agents, id as agent_id_col, mcp_servers as mcp_servers_col};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
     // Verify MCP server exists
-    use schema::mcp_servers::dsl::{mcp_servers as mcp_servers_dsl, id as mcp_id_col};
+    use anyagents::schema::mcp_servers::dsl::{mcp_servers as mcp_servers_dsl, id as mcp_id_col};
     let _ = mcp_servers_dsl
         .filter(mcp_id_col.eq(&mcp_server_id))
         .first::<McpServer>(&mut conn)
@@ -228,7 +227,7 @@ pub async fn remove_mcp_from_agent(
     agent_id: String,
     mcp_server_id: String,
 ) -> Result<AgentDto, String> {
-    use schema::agents::dsl::{agents, id as agent_id_col, mcp_servers as mcp_servers_col};
+    use anyagents::schema::agents::dsl::{agents, id as agent_id_col, mcp_servers as mcp_servers_col};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 

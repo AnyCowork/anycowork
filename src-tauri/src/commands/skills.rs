@@ -1,10 +1,10 @@
-use crate::models::{
+use anyagents::models::{
     AgentSkill, AgentSkillAssignment, MarketplaceSkill, NewAgentSkill, NewAgentSkillAssignment,
     NewSkillFile, SkillFile, UpdateAgentSkill,
 };
-use crate::schema;
-use crate::skills::docker::DockerSandbox;
-use crate::skills::loader::{load_skill_from_directory, load_skill_from_zip, list_marketplace_skills as scan_marketplace_skills};
+use anyagents::schema;
+use anyagents::skills::docker::DockerSandbox;
+use anyagents::skills::loader::{load_skill_from_directory, load_skill_from_zip, list_marketplace_skills as scan_marketplace_skills};
 use crate::AppState;
 use diesel::prelude::*;
 use std::path::Path;
@@ -17,7 +17,7 @@ pub async fn get_skills(
     state: State<'_, AppState>,
     enabled_only: Option<bool>,
 ) -> Result<Vec<AgentSkill>, String> {
-    use schema::agent_skills::dsl::{agent_skills, enabled, name};
+    use anyagents::schema::agent_skills::dsl::{agent_skills, enabled, name};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -35,7 +35,7 @@ pub async fn get_skills(
 
 #[tauri::command]
 pub async fn get_skill(state: State<'_, AppState>, skill_id: String) -> Result<AgentSkill, String> {
-    use schema::agent_skills::dsl::{agent_skills, id};
+    use anyagents::schema::agent_skills::dsl::{agent_skills, id};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
     agent_skills
@@ -53,7 +53,7 @@ pub async fn create_skill(
     skill_content: String,
     additional_files_json: Option<String>,
 ) -> Result<AgentSkill, String> {
-    use schema::agent_skills;
+    use anyagents::schema::agent_skills;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -103,7 +103,7 @@ pub async fn update_skill(
     requires_sandbox: Option<bool>,
     sandbox_config: Option<String>,
 ) -> Result<AgentSkill, String> {
-    use schema::agent_skills::dsl::{agent_skills, id};
+    use anyagents::schema::agent_skills::dsl::{agent_skills, id};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -143,7 +143,7 @@ pub async fn update_skill(
 
 #[tauri::command]
 pub async fn delete_skill(state: State<'_, AppState>, skill_id: String) -> Result<(), String> {
-    use schema::agent_skills::dsl::{agent_skills, id};
+    use anyagents::schema::agent_skills::dsl::{agent_skills, id};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -173,7 +173,7 @@ pub async fn toggle_skill(
     state: State<'_, AppState>,
     skill_id: String,
 ) -> Result<AgentSkill, String> {
-    use schema::agent_skills::dsl::{agent_skills, enabled, id};
+    use anyagents::schema::agent_skills::dsl::{agent_skills, enabled, id};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -240,10 +240,10 @@ pub async fn import_skill_from_zip(
 /// Helper function to save a loaded skill to the database
 async fn save_loaded_skill(
     state: &State<'_, AppState>,
-    loaded: crate::skills::loader::LoadedSkill,
+    loaded: anyagents::skills::loader::LoadedSkill,
     source_path: Option<String>,
 ) -> Result<AgentSkill, String> {
-    use schema::agent_skills;
+    use anyagents::schema::agent_skills;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -494,7 +494,7 @@ pub async fn update_agent_scope(
     scope_type: String,
     workspace_path: Option<String>,
 ) -> Result<(), String> {
-    use schema::agents::dsl::agents;
+    use anyagents::schema::agents::dsl::agents;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 

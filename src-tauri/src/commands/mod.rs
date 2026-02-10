@@ -13,4 +13,8 @@ pub use pages::*;
 pub use sessions::*;
 pub use skills::*;
 pub use telegram::*;
-pub use window::*;
+pub mod transcribe;
+pub use transcribe::*;
+
+pub mod tasks;
+pub use tasks::*;

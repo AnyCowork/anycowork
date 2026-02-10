@@ -114,7 +114,7 @@ export default function MCPServersPage() {
                 <Server className="h-5 w-5 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">MCP Servers</h1>
+                <h1 className="text-2xl font-bold">Connectors - MCP Servers</h1>
                 <p className="text-sm text-muted-foreground">
                   Manage global Model Context Protocol servers available to all agents
                 </p>

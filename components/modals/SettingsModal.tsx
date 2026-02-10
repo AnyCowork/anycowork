@@ -27,8 +27,10 @@ export const SettingsModal = () => {
   // Fetch RAG config
   const { data: config, isLoading: loading } = useRAGFullConfig();
   const updateConfig = useUpdateRAGFullConfig();
-  
+
   // Import mutations
+  // const importFile = useImportNotionFile();
+  // const importZip = useImportNotionZip();
   const importFile = useImportNotionFile();
   const importZip = useImportNotionZip();
 
@@ -43,7 +45,7 @@ export const SettingsModal = () => {
     if (!files || files.length === 0) return;
 
     importFile.mutate(
-      { file: files[0] },
+      files[0],
       {
         onSettled: () => {
           if (fileInputRef.current) {
@@ -59,7 +61,7 @@ export const SettingsModal = () => {
     if (!files || files.length === 0) return;
 
     importZip.mutate(
-      { file: files[0] },
+      files[0],
       {
         onSettled: () => {
           if (zipInputRef.current) {
@@ -86,10 +88,10 @@ export const SettingsModal = () => {
               </DialogDescription>
             </div>
             {config && (
-              <Button 
-                onClick={handleSaveConfig} 
-                disabled={updateConfig.isPending} 
-                size="sm" 
+              <Button
+                onClick={handleSaveConfig}
+                disabled={updateConfig.isPending}
+                size="sm"
                 className="shrink-0"
               >
                 {updateConfig.isPending ? (

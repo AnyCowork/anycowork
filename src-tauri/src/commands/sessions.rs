@@ -1,5 +1,5 @@
-use crate::models::{Message, NewMessage, NewSession, Session, UpdateSession};
-use crate::schema;
+use anyagents::models::{Message, NewMessage, NewSession, Session, UpdateSession};
+use anyagents::schema;
 use crate::AppState;
 use diesel::prelude::*;
 use serde::Serialize;
@@ -10,7 +10,7 @@ pub async fn create_session(
     state: State<'_, AppState>,
     agent_id: String,
 ) -> Result<Session, String> {
-    use schema::sessions;
+    use anyagents::schema::sessions;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -44,7 +44,7 @@ pub async fn get_sessions(
     limit: Option<i64>,
     offset: Option<i64>,
 ) -> Result<Vec<Session>, String> {
-    use schema::sessions::dsl::{archived, pinned, sessions, updated_at};
+    use anyagents::schema::sessions::dsl::{archived, pinned, sessions, updated_at};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -72,7 +72,7 @@ pub async fn get_sessions(
 
 #[tauri::command]
 pub async fn delete_session(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
-    use schema::sessions::dsl::*;
+    use anyagents::schema::sessions::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
     diesel::delete(sessions.filter(id.eq(session_id)))
@@ -87,7 +87,7 @@ pub async fn get_session_messages(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<Vec<Message>, String> {
-    use schema::messages::dsl::{created_at, messages};
+    use anyagents::schema::messages::dsl::{created_at, messages};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
     let results = messages
@@ -111,7 +111,7 @@ pub async fn update_session(
     archived_param: Option<bool>,
     pinned_param: Option<bool>,
 ) -> Result<Session, String> {
-    use schema::sessions::dsl::{id, sessions};
+    use anyagents::schema::sessions::dsl::{id, sessions};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -144,8 +144,8 @@ pub async fn get_session_with_messages(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<SessionWithMessages, String> {
-    use schema::messages::dsl::{created_at, messages, session_id as msg_session_id};
-    use schema::sessions::dsl::{id as session_id_col, sessions};
+    use anyagents::schema::messages::dsl::{created_at, messages, session_id as msg_session_id};
+    use anyagents::schema::sessions::dsl::{id as session_id_col, sessions};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -177,7 +177,7 @@ pub async fn add_message(
     metadata_json: Option<String>,
     tokens: Option<i32>,
 ) -> Result<Message, String> {
-    use schema::messages;
+    use anyagents::schema::messages;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -205,7 +205,7 @@ pub async fn add_message(
 
 #[tauri::command]
 pub async fn delete_message(state: State<'_, AppState>, message_id: String) -> Result<(), String> {
-    use schema::messages::dsl::{id, messages};
+    use anyagents::schema::messages::dsl::{id, messages};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
     diesel::delete(messages.filter(id.eq(message_id)))
@@ -227,7 +227,7 @@ pub async fn get_session_stats(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<SessionStats, String> {
-    use schema::messages::dsl::{messages, session_id as msg_session_id, tokens};
+    use anyagents::schema::messages::dsl::{messages, session_id as msg_session_id, tokens};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -256,9 +256,9 @@ pub async fn get_session_stats(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::create_test_pool;
-    use crate::models::NewAgent;
-    use crate::schema::agents;
+    use anyagents::database::create_test_pool;
+    use anyagents::models::NewAgent;
+    use anyagents::schema::agents;
     use tauri::test::mock_builder;
     use tauri::Manager;
 
@@ -309,7 +309,7 @@ mod tests {
             telegram_manager: std::sync::Arc::new(crate::telegram::TelegramBotManager::new(
                 create_test_pool(),
             )),
-            permission_manager: std::sync::Arc::new(crate::permissions::PermissionManager::new()),
+            permission_manager: std::sync::Arc::new(anyagents::permissions::PermissionManager::new()),
         }
     }
 

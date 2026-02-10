@@ -1,7 +1,7 @@
-use anycowork::skills::loader::load_skill_from_directory;
-use anycowork::skills::SkillTool;
-use anycowork::tools::Tool;
-use anycowork::tools::ToolContext;
+use anyagents::skills::loader::load_skill_from_directory;
+use anyagents::skills::SkillTool;
+use anyagents::tools::Tool;
+use anyagents::tools::ToolContext;
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
@@ -32,9 +32,9 @@ async fn test_verify_docker_execution() {
         "args": "echo 'Docker Verification'"
     });
 
-    let ctx: ToolContext<tauri::test::MockRuntime> = ToolContext {
-        permissions: std::sync::Arc::new(anycowork::permissions::PermissionManager::new()),
-        window: None,
+    let ctx: ToolContext = ToolContext {
+        permissions: std::sync::Arc::new(anyagents::permissions::PermissionManager::new()),
+        observer: None,
         session_id: "test_session".to_string(),
     };
 

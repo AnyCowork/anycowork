@@ -1,21 +1,16 @@
-pub mod agents;
 pub mod commands;
-pub mod database;
-pub mod events;
-pub mod llm;
-pub mod mcp;
-pub mod models;
-pub mod permissions;
-pub mod schema;
-pub mod skills;
-pub mod snapshots;
 pub mod telegram;
-pub mod tools;
+pub mod events;
+pub mod schema;
+pub mod models;
 
-use dashmap::DashMap;
-use database::DbPool;
-use permissions::PermissionManager;
 use std::sync::Arc;
+use dashmap::DashMap;
+pub mod database;
+use anyagents::database::DbPool;
+
+// Setup DB
+use anyagents::permissions::PermissionManager;
 use telegram::TelegramBotManager;
 use tokio::sync::oneshot;
 
@@ -37,11 +32,11 @@ pub fn run() {
     env_logger::init();
 
     // Setup DB
-    let pool = database::establish_connection();
-    database::run_migrations(&pool);
+    let pool = anyagents::database::establish_connection();
+    crate::database::run_migrations(&pool);
 
     // Create default agent if none exist
-    database::ensure_default_agent(&pool);
+    anyagents::database::ensure_default_agent(&pool);
 
     let pending_approvals = Arc::new(DashMap::new());
     let telegram_manager = Arc::new(TelegramBotManager::new(pool.clone()));
@@ -143,9 +138,20 @@ pub fn run() {
             // Agent scope commands
             commands::update_agent_scope,
             // Window commands
-            commands::toggle_devtools,
-            commands::is_dev_mode,
-            commands::get_current_working_directory
+            commands::window::toggle_devtools,
+            
+            commands::window::is_dev_mode,
+            commands::window::get_current_working_directory,
+            // App commands
+            commands::transcribe_file,
+            commands::check_model_status,
+            commands::download_model,
+            // Task commands
+            commands::create_task,
+            commands::list_tasks,
+            commands::update_task,
+            commands::delete_task
+
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

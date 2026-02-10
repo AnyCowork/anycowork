@@ -1,3 +1,6 @@
+[workspace]
+members = []
+
 [package]
 name = "anycowork"
 version = "0.1.0"
@@ -14,6 +17,7 @@ path = "src/lib.rs"
 tauri-build = { version = "2.0.0", features = [] }
 
 [dependencies]
+anyagents = { path = "../anyagents" }
 tauri = { version = "2.0.0", features = ["test"] }
 tauri-plugin-shell = "2.0.0"
 tauri-plugin-dialog = "2.0.0"
@@ -23,6 +27,7 @@ tokio = { version = "1", features = ["full"] }
 rig-core = "0.29.0" 
 diesel = { version = "2.2.0", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "2.2.0"
+libsqlite3-sys = { version = "0.26", features = ["bundled"] }
 dotenvy = "0.15"
 uuid = { version = "1.19.0", features = ["serde", "v4"] }
 chrono = { version = "0.4.43", features = ["serde"] }
@@ -47,6 +52,10 @@ schemars = "0.8"
 reqwest = { version = "0.11", features = ["json"] }
 zip = "2.2"
 tempfile = "3.24.0"
+transcribe-rs = { path = "../thirdparty/transcribe-rs", features = ["parakeet"] }
+dirs = "5.0"
+flate2 = "1.0"
+tar = "0.4"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

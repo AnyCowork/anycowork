@@ -8,9 +8,8 @@ use std::sync::Arc;
 use teloxide::prelude::*;
 use tokio::sync::{mpsc, RwLock};
 
-use crate::database::DbPool;
-use crate::models::{Agent, TelegramConfig};
-use crate::schema;
+use anyagents::database::DbPool;
+use anyagents::models::{Agent, TelegramConfig};
 
 pub type BotShutdownSender = mpsc::Sender<()>;
 
@@ -175,7 +174,7 @@ impl TelegramBotManager {
     }
 
     fn get_config(&self, config_id: &str) -> Result<TelegramConfig, String> {
-        use schema::telegram_configs::dsl::*;
+        use anyagents::schema::telegram_configs::dsl::*;
 
         let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
         telegram_configs
@@ -185,7 +184,7 @@ impl TelegramBotManager {
     }
 
     fn get_agent(&self, agent_id: &str) -> Result<Agent, String> {
-        use schema::agents::dsl::*;
+        use anyagents::schema::agents::dsl::*;
 
         let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
         agents
@@ -207,7 +206,7 @@ impl TelegramBotManager {
     }
 
     fn get_active_configs(&self) -> Result<Vec<TelegramConfig>, String> {
-        use schema::telegram_configs::dsl::*;
+        use anyagents::schema::telegram_configs::dsl::*;
 
         let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
         telegram_configs

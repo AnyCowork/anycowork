@@ -1,7 +1,6 @@
-use crate::models::{
+use anyagents::models::{
     Attachment, Block, NewAttachment, NewBlock, NewPage, Page, UpdateBlock, UpdatePage,
 };
-use crate::schema;
 use crate::AppState;
 use diesel::prelude::*;
 use serde::Deserialize;
@@ -18,7 +17,7 @@ pub async fn create_page(
     page_type: String,
     parent_id: Option<String>,
 ) -> Result<Page, String> {
-    use schema::pages;
+    use anyagents::schema::pages;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -55,7 +54,7 @@ pub async fn get_pages(
     parent_id_param: Option<String>,
     archived: Option<bool>,
 ) -> Result<Vec<Page>, String> {
-    use schema::pages::dsl::{is_archived, pages, parent_id, updated_at};
+    use anyagents::schema::pages::dsl::{is_archived, pages, parent_id, updated_at};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -80,7 +79,7 @@ pub async fn get_pages(
 
 #[tauri::command]
 pub async fn get_page(state: State<'_, AppState>, page_id: String) -> Result<Page, String> {
-    use schema::pages::dsl::*;
+    use anyagents::schema::pages::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
     pages
@@ -98,7 +97,7 @@ pub async fn update_page(
     cover_image_param: Option<String>,
     is_published_param: Option<bool>,
 ) -> Result<Page, String> {
-    use schema::pages::dsl::{id, pages};
+    use anyagents::schema::pages::dsl::{id, pages};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -125,7 +124,7 @@ pub async fn update_page(
 
 #[tauri::command]
 pub async fn archive_page(state: State<'_, AppState>, page_id: String) -> Result<Page, String> {
-    use schema::pages::dsl::*;
+    use anyagents::schema::pages::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -152,7 +151,7 @@ pub async fn archive_page(state: State<'_, AppState>, page_id: String) -> Result
 
 #[tauri::command]
 pub async fn restore_page(state: State<'_, AppState>, page_id: String) -> Result<Page, String> {
-    use schema::pages::dsl::*;
+    use anyagents::schema::pages::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -179,7 +178,7 @@ pub async fn restore_page(state: State<'_, AppState>, page_id: String) -> Result
 
 #[tauri::command]
 pub async fn delete_page(state: State<'_, AppState>, page_id: String) -> Result<(), String> {
-    use schema::pages::dsl::*;
+    use anyagents::schema::pages::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
     diesel::delete(pages.filter(id.eq(page_id)))
@@ -198,7 +197,7 @@ pub async fn get_page_blocks(
     state: State<'_, AppState>,
     page_id_param: String,
 ) -> Result<Vec<Block>, String> {
-    use schema::blocks::dsl::*;
+    use anyagents::schema::blocks::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
     blocks
@@ -216,8 +215,8 @@ pub async fn create_block(
     content_json_param: String,
     order_index_param: Option<i32>,
 ) -> Result<Block, String> {
-    use schema::blocks;
-    use schema::blocks::dsl::{blocks as blocks_table, id as block_id, order_index, page_id};
+    use anyagents::schema::blocks;
+    use anyagents::schema::blocks::dsl::{blocks as blocks_table, id as block_id, order_index, page_id};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -264,7 +263,7 @@ pub async fn update_block(
     content_json_param: Option<String>,
     order_index_param: Option<i32>,
 ) -> Result<Block, String> {
-    use schema::blocks::dsl::{blocks, id};
+    use anyagents::schema::blocks::dsl::{blocks, id};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -288,7 +287,7 @@ pub async fn update_block(
 
 #[tauri::command]
 pub async fn delete_block(state: State<'_, AppState>, block_id: String) -> Result<(), String> {
-    use schema::blocks::dsl::*;
+    use anyagents::schema::blocks::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
     diesel::delete(blocks.filter(id.eq(block_id)))
@@ -312,7 +311,7 @@ pub async fn batch_update_blocks(
     page_id_param: String,
     updates: Vec<BlockUpdate>,
 ) -> Result<Vec<Block>, String> {
-    use schema::blocks::dsl::*;
+    use anyagents::schema::blocks::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -351,7 +350,7 @@ pub async fn upload_attachment(
     file_name: String,
     file_data: Vec<u8>,
 ) -> Result<Attachment, String> {
-    use schema::attachments;
+    use anyagents::schema::attachments;
     use std::fs;
     use tauri::Manager;
 
@@ -402,7 +401,7 @@ pub async fn get_page_attachments(
     state: State<'_, AppState>,
     page_id_param: String,
 ) -> Result<Vec<Attachment>, String> {
-    use schema::attachments::dsl::*;
+    use anyagents::schema::attachments::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
     attachments
@@ -418,7 +417,7 @@ pub async fn delete_attachment(
     state: State<'_, AppState>,
     attachment_id: String,
 ) -> Result<(), String> {
-    use schema::attachments::dsl::*;
+    use anyagents::schema::attachments::dsl::*;
     use std::fs;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
@@ -443,7 +442,7 @@ pub async fn delete_attachment(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::create_test_pool;
+    use anyagents::database::create_test_pool;
     use tauri::test::mock_builder;
     use tauri::Manager;
 
@@ -455,7 +454,7 @@ mod tests {
             telegram_manager: std::sync::Arc::new(crate::telegram::TelegramBotManager::new(
                 create_test_pool(),
             )),
-            permission_manager: std::sync::Arc::new(crate::permissions::PermissionManager::new()),
+            permission_manager: std::sync::Arc::new(anyagents::permissions::PermissionManager::new()),
         }
     }
 

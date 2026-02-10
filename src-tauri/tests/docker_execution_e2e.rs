@@ -6,12 +6,12 @@
 //! 3. Fallback to direct execution when Docker is unavailable
 //! 4. Security policy enforcement
 
-use anycowork::models::{ParsedSkill, SandboxConfig};
-use anycowork::permissions::PermissionManager;
-use anycowork::skills::docker::DockerSandbox;
-use anycowork::skills::loader::{load_skill_from_directory, LoadedSkill, SkillFileContent};
-use anycowork::skills::SkillTool;
-use anycowork::tools::{Tool, ToolContext};
+use anyagents::models::{ParsedSkill, SandboxConfig};
+use anyagents::permissions::PermissionManager;
+use anyagents::skills::docker::DockerSandbox;
+use anyagents::skills::loader::{load_skill_from_directory, LoadedSkill, SkillFileContent};
+use anyagents::skills::SkillTool;
+use anyagents::tools::{Tool, ToolContext};
 use serde_json::json;
 use std::collections::HashMap;
 use std::path::Path;
@@ -44,10 +44,10 @@ fn create_test_skill(
     }
 }
 
-fn create_test_context() -> ToolContext<tauri::test::MockRuntime> {
+fn create_test_context() -> ToolContext {
     ToolContext {
         permissions: Arc::new(PermissionManager::new()),
-        window: None,
+        observer: None,
         session_id: "e2e_test_session".to_string(),
     }
 }
@@ -401,7 +401,7 @@ async fn test_skill_tool_direct_execution() {
 
 #[tokio::test]
 async fn test_bash_tool_sandbox_execution() {
-    use anycowork::tools::bash::BashTool;
+    use anyagents::tools::bash::BashTool;
 
     if !is_docker_available().await {
         println!("Skipping: Docker not available");
@@ -427,9 +427,9 @@ async fn test_bash_tool_sandbox_execution() {
         }
     });
 
-    let ctx: ToolContext<tauri::test::MockRuntime> = ToolContext {
+    let ctx: ToolContext = ToolContext {
         permissions: pm,
-        window: None,
+        observer: None,
         session_id: "bash_test".to_string(),
     };
 
@@ -450,7 +450,7 @@ async fn test_bash_tool_sandbox_execution() {
 
 #[tokio::test]
 async fn test_bash_tool_sandbox_not_available_fails() {
-    use anycowork::tools::bash::BashTool;
+    use anyagents::tools::bash::BashTool;
 
     // This test simulates sandbox mode when Docker is not available
     // We can't easily mock Docker unavailability, but we can test the error path
@@ -471,9 +471,9 @@ async fn test_bash_tool_sandbox_not_available_fails() {
         }
     });
 
-    let ctx: ToolContext<tauri::test::MockRuntime> = ToolContext {
+    let ctx: ToolContext = ToolContext {
         permissions: pm,
-        window: None,
+        observer: None,
         session_id: "bash_test".to_string(),
     };
 

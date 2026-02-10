@@ -94,6 +94,7 @@ export const CoverImageModal = () => {
               value={file}
               onChange={onChange}
             />
+            {/* <div className="p-4 text-center border dashed">Upload disabled</div> */}
           </TabsContent>
         </Tabs>
       </DialogContent>

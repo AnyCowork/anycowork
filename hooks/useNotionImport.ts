@@ -1,59 +1,38 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { settingsApi } from "@/lib/settings-api";
+import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-export function useImportNotionFile() {
-  const queryClient = useQueryClient();
+export const useImportNotionFile = () => {
+    return useMutation({
+        mutationFn: async (file: File) => {
+            // TODO: Implement backend command
+            console.log("Mock importing Notion file:", file.name);
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            return { success: true };
+        },
+        onSuccess: () => {
+            toast.success("Notion import (Mock) successful!");
+        },
+        onError: (error) => {
+            toast.error("Failed to import Notion file");
+            console.error(error);
+        }
+    });
+};
 
-  return useMutation({
-    mutationFn: ({
-      file,
-      parentId,
-    }: {
-      file: File;
-      parentId?: string;
-    }) => settingsApi.importNotionFile(file, parentId),
-    onSuccess: (result) => {
-      // Invalidate documents queries to refresh the sidebar
-      queryClient.invalidateQueries({ queryKey: ["documents"] });
-      queryClient.invalidateQueries({ queryKey: ["pages"] });
-      
-      toast.success(
-        `Imported "${result.title}" with ${result.blocks_count} blocks`
-      );
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to import file");
-    },
-  });
-}
-
-export function useImportNotionZip() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      file,
-      parentId,
-    }: {
-      file: File;
-      parentId?: string;
-    }) => settingsApi.importNotionZip(file, parentId),
-    onSuccess: (result) => {
-      // Invalidate documents queries to refresh the sidebar
-      queryClient.invalidateQueries({ queryKey: ["documents"] });
-      queryClient.invalidateQueries({ queryKey: ["pages"] });
-      
-      toast.success(
-        `Imported ${result.imported} of ${result.total_files} pages`
-      );
-      
-      if (result.failed > 0) {
-        toast.warning(`${result.failed} pages failed to import`);
-      }
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to import ZIP file");
-    },
-  });
-}
+export const useImportNotionZip = () => {
+    return useMutation({
+        mutationFn: async (file: File) => {
+            // TODO: Implement backend command
+            console.log("Mock importing Notion zip:", file.name);
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            return { success: true };
+        },
+        onSuccess: () => {
+            toast.success("Notion Zip import (Mock) successful!");
+        },
+        onError: (error) => {
+            toast.error("Failed to import Notion zip");
+            console.error(error);
+        }
+    });
+};

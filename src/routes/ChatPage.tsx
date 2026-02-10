@@ -294,6 +294,7 @@ export default function ChatPage() {
       // Fetch message history from API
       const loadMessages = async () => {
         try {
+          setPendingApproval(null);
           const loadedMessagesData = await anycoworkApi.getSessionMessages(sessionId);
           if (loadedMessagesData) {
             const loadedMessages: Message[] = loadedMessagesData.map((msg: any) => {
@@ -382,21 +383,6 @@ export default function ChatPage() {
                 }
               }
 
-              // 2. Hide raw JSON tool calls from Assistant (Request)
-              // The backend saves the raw JSON request `{ "tool": "...", "args": ... }` as an assistant message.
-              // Since we render the *Result* (above) as a full step (which shows input/output), we don't need this raw texts.
-              if (msg.role === 'assistant') {
-                try {
-                  const trimmed = content.trim();
-                  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-                    const parsed = JSON.parse(trimmed);
-                    if (parsed.tool && parsed.args) {
-                      // This is a tool call request. Hide it.
-                      return null;
-                    }
-                  }
-                } catch (e) { /* Not JSON */ }
-              }
 
               if (content && content.includes('---a2ui_JSON---')) {
                 const parts = content.split('---a2ui_JSON---');
@@ -444,6 +430,7 @@ export default function ChatPage() {
     } else {
       // Clear messages for new session or when no session selected (after deletion)
       setMessages([]);
+      setPendingApproval(null);
     }
   }, [sessionId]);
 
@@ -745,10 +732,9 @@ export default function ChatPage() {
     async function startListening() {
       if (!sessionId || sessionId === 'new') return;
 
-      console.log(`Starting listener for session:${sessionId}`);
       unlisten = await listen(`session:${sessionId}`, (event: any) => {
         const payload = event.payload;
-        console.log("Event received:", payload);
+        console.debug("🔥 [DEBUG Event]:", JSON.stringify(payload));
 
         // Handle Event Types
         if (payload.type === 'token') {
@@ -805,26 +791,30 @@ export default function ChatPage() {
           // Show thinking in status bar
           setThinkingMessage(payload.message);
 
-          // ALSO add to chat history for debugging per user request, preventing spam
+          // Add to chat history as a distinct "thinking" message type
           setMessages(prev => {
             const lastMsg = prev[prev.length - 1];
-            if (lastMsg && String(lastMsg.id).startsWith('thinking-')) {
-              // Append to existing thinking message
+
+            // If the last message is already a thinking message, append to it
+            // checking specifically for message_type property which we added
+            if (lastMsg && lastMsg.message_type === 'thinking') {
               return [
                 ...prev.slice(0, -1),
                 { ...lastMsg, content: lastMsg.content + payload.message }
               ];
-            } else {
-              return [
-                ...prev,
-                {
-                  id: `thinking-${Date.now()}`,
-                  role: 'system', // Use system role for visibility
-                  content: `> 🧠 **Thinking**: ${payload.message}`,
-                  timestamp: Date.now(),
-                }
-              ];
             }
+
+            // Otherwise create a new thinking message block
+            return [
+              ...prev,
+              {
+                id: `thinking-${Date.now()}`,
+                role: 'assistant', // Use assistant role so it aligns correctly
+                message_type: 'thinking', // Special marker for UI rendering
+                content: `> 🧠 **Thinking**: ${payload.message}`,
+                timestamp: Date.now(),
+              }
+            ];
           });
         } else if (payload.type === 'step_started') {
           // Show that a step is starting
@@ -1453,54 +1443,12 @@ export default function ChatPage() {
 
         <div className="flex-1 flex flex-row overflow-hidden relative">
           {/* Sticky Approval Notification Bar */}
-          {pendingApproval && (
-            <div
-              ref={approvalBarRef}
-              className="absolute top-0 left-0 right-0 z-10 bg-amber-50 dark:bg-amber-950/90 border-b border-amber-200 dark:border-amber-800 shadow-md animate-in slide-in-from-top-2 duration-300"
-            >
-              <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 animate-pulse" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-                      Approval Required
-                    </p>
-                    <p className="text-xs text-amber-700 dark:text-amber-300 truncate">
-                      {pendingApproval.tool_name === "filesystem" ? "📁 Filesystem access" :
-                        pendingApproval.tool_name === "bash" ? "⚡ Command execution" :
-                          `🔧 ${pendingApproval.tool_name}`}
-                      {pendingApproval.tool_args.command && `: ${pendingApproval.tool_args.command.substring(0, 40)}...`}
-                      {pendingApproval.tool_args.path && `: ${pendingApproval.tool_args.path}`}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleReject}
-                    className="gap-1 h-8 px-3 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:border-red-900 dark:hover:bg-red-950"
-                  >
-                    <XCircle className="h-3.5 w-3.5" /> Deny
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleApprove}
-                    className="gap-1 bg-green-600 hover:bg-green-700 text-white h-8 px-3 shadow-sm"
-                  >
-                    <CheckCircle className="h-3.5 w-3.5" /> Approve
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Chat Area */}
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             {/* Messages */}
             <div className={cn(
-              "flex-1 overflow-y-auto p-6 space-y-6",
-              pendingApproval && "pt-20" // Add padding when approval bar is visible
+              "flex-1 overflow-y-auto p-6 space-y-6"
             )} ref={messagesContainerRef}>
               {(!sessionId || sessionId === 'new') ? (
                 <div className="h-full flex flex-col items-center justify-center text-center space-y-6 max-w-2xl mx-auto">
@@ -1528,233 +1476,234 @@ export default function ChatPage() {
                 </div>
               ) : null}
 
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={cn(
-                    "flex gap-4 max-w-full",
-                    message.role === "user" && "flex-row-reverse",
-                    (message.role === "system" || message.message_type === "thinking") && "pl-8 gap-2"
-                  )}
-                >
-                  {/* Hide avatar for system/thinking messages */}
-                  {message.role !== "system" && message.message_type !== "thinking" && (
-                    <Avatar className="h-8 w-8 shrink-0 border border-border/50">
-                      <AvatarFallback
-                        className={cn(
-                          message.role === "user"
-                            ? "bg-secondary text-foreground"
-                            : "bg-muted text-muted-foreground"
-                        )}
-                      >
-                        {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-                      </AvatarFallback>
-                    </Avatar>
-                  )}
-
+              {messages.map((message) => {
+                return (
                   <div
+                    key={message.id}
                     className={cn(
-                      "flex-1 space-y-2 max-w-full overflow-hidden",
-                      message.role === "user" && "flex flex-col items-end"
+                      "flex gap-4 max-w-full",
+                      message.role === "user" && "flex-row-reverse",
+                      (message.role === "system" || message.message_type === "thinking") && "pl-8 gap-2"
                     )}
                   >
+                    {/* Hide avatar for system/thinking messages */}
+                    {message.role !== "system" && message.message_type !== "thinking" && (
+                      <Avatar className="h-8 w-8 shrink-0 border border-border/50">
+                        <AvatarFallback
+                          className={cn(
+                            message.role === "user"
+                              ? "bg-secondary text-foreground"
+                              : "bg-muted text-muted-foreground"
+                          )}
+                        >
+                          {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
+
                     <div
                       className={cn(
-                        "inline-block",
-                        message.role === "system" || message.message_type === "thinking"
-                          ? message.step
-                            ? "" // No background wrapper for tool execution messages
-                            : "px-3 py-1.5 text-xs text-muted-foreground bg-muted/50 border border-border/40 rounded-lg"
-                          : message.role === "user"
-                            ? "px-4 py-3 bg-secondary/80 text-foreground rounded-2xl rounded-br-sm break-words border border-border/30"
-                            : "px-4 py-3 bg-background text-foreground rounded-2xl rounded-bl-sm max-w-full overflow-hidden break-words border border-border/50"
+                        "flex-1 space-y-2 max-w-full overflow-hidden",
+                        message.role === "user" && "flex flex-col items-end"
                       )}
                     >
-                      {/* Show text content only if:
+                      <div
+                        className={cn(
+                          "inline-block",
+                          message.role === "system" || message.message_type === "thinking"
+                            ? message.step
+                              ? "" // No background wrapper for tool execution messages
+                              : "px-3 py-1.5 text-xs text-muted-foreground bg-muted/50 border border-border/40 rounded-lg"
+                            : message.role === "user"
+                              ? "px-4 py-3 bg-secondary/80 text-foreground rounded-2xl rounded-br-sm break-words border border-border/30"
+                              : "px-4 py-3 bg-background text-foreground rounded-2xl rounded-bl-sm max-w-full overflow-hidden break-words border border-border/50"
+                        )}
+                      >
+                        {/* Show text content only if:
                         1. There's no A2UI AND no Step (Action History)
                         2. Or there's meaningful text content
                     */}
-                      {message.step ? (
-                        // Compact Tool Execution Display - No background wrapper
-                        <div className="flex flex-col gap-0 max-w-2xl">
-                          {/* Compact Header - Always Visible */}
-                          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors">
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <div className={cn(
-                                "h-6 w-6 rounded-md flex items-center justify-center shrink-0",
-                                message.step.status === 'failed' || message.id.startsWith('rejected')
-                                  ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
-                                  : "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
-                              )}>
-                                {message.step.status === 'failed' || message.id.startsWith('rejected')
-                                  ? <XCircle className="h-4 w-4" />
-                                  : <CheckCircle className="h-4 w-4" />}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-xs font-semibold text-foreground/90 truncate">
-                                  {message.step.tool_name === "filesystem" ? "📁 Filesystem" :
-                                    message.step.tool_name === "bash" ? "⚡ Command" :
-                                      message.step.tool_name === "search" ? "🔍 Search" :
-                                        "🔧 " + message.step.tool_name.replace(/_/g, ' ')}
+                        {message.step ? (
+                          // Compact Tool Execution Display - No background wrapper
+                          <div className="flex flex-col gap-0 max-w-2xl">
+                            {/* Compact Header - Always Visible */}
+                            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <div className={cn(
+                                  "h-6 w-6 rounded-md flex items-center justify-center shrink-0",
+                                  message.step.status === 'failed' || message.id.startsWith('rejected')
+                                    ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+                                    : "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+                                )}>
+                                  {message.step.status === 'failed' || message.id.startsWith('rejected')
+                                    ? <XCircle className="h-4 w-4" />
+                                    : <CheckCircle className="h-4 w-4" />}
                                 </div>
-                                <div className="text-[10px] text-muted-foreground truncate">
-                                  {(() => {
-                                    // Show operation summary
-                                    const args = message.step.tool_args;
-                                    if (message.step.tool_name === "bash" && args.command) {
-                                      return args.command.substring(0, 60) + (args.command.length > 60 ? '...' : '');
-                                    } else if (message.step.tool_name === "filesystem" && args.operation) {
-                                      return `${args.operation} ${args.path || args.directory || ''}`.substring(0, 60);
-                                    } else if (message.step.tool_name === "search") {
-                                      return `${args.pattern || args.query || ''}`.substring(0, 60);
-                                    }
-                                    return Object.keys(args).slice(0, 2).join(', ');
-                                  })()}
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-xs font-semibold text-foreground/90 truncate">
+                                    {message.step.tool_name === "filesystem" ? "📁 Filesystem" :
+                                      message.step.tool_name === "bash" ? "⚡ Command" :
+                                        message.step.tool_name === "search" ? "🔍 Search" :
+                                          "🔧 " + message.step.tool_name.replace(/_/g, ' ')}
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground truncate">
+                                    {(() => {
+                                      // Show operation summary
+                                      const args = message.step.tool_args;
+                                      if (message.step.tool_name === "bash" && args.command) {
+                                        return args.command.substring(0, 60) + (args.command.length > 60 ? '...' : '');
+                                      } else if (message.step.tool_name === "filesystem" && args.operation) {
+                                        return `${args.operation} ${args.path || args.directory || ''}`.substring(0, 60);
+                                      } else if (message.step.tool_name === "search") {
+                                        return `${args.pattern || args.query || ''}`.substring(0, 60);
+                                      }
+                                      return Object.keys(args).slice(0, 2).join(', ');
+                                    })()}
+                                  </div>
                                 </div>
                               </div>
+                              <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-mono opacity-60 shrink-0">
+                                {new Date(message.timestamp).toLocaleTimeString()}
+                              </Badge>
                             </div>
-                            <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-mono opacity-60 shrink-0">
-                              {new Date(message.timestamp).toLocaleTimeString()}
-                            </Badge>
-                          </div>
 
-                          {/* Collapsible Details */}
-                          <details className="group">
-                            <summary className="flex items-center gap-2 cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2 hover:bg-muted/10 rounded-lg">
-                              <div className="transition-transform group-open:rotate-90">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                              </div>
-                              <span>Show Details</span>
-                            </summary>
+                            {/* Collapsible Details */}
+                            <details className="group">
+                              <summary className="flex items-center gap-2 cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2 hover:bg-muted/10 rounded-lg">
+                                <div className="transition-transform group-open:rotate-90">
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                </div>
+                                <span>Show Details</span>
+                              </summary>
 
-                            <div className="px-3 py-2 space-y-2 text-xs">
-                              {/* Request Section - Collapsible */}
-                              {message.step.tool_args && Object.keys(message.step.tool_args).length > 0 && (
-                                <details className="group/req">
-                                  <summary className="flex items-center gap-2 cursor-pointer font-medium text-muted-foreground hover:text-foreground py-1">
-                                    <div className="transition-transform group-open/req:rotate-90">
-                                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                              <div className="px-3 py-2 space-y-2 text-xs">
+                                {/* Request Section - Collapsible */}
+                                {message.step.tool_args && Object.keys(message.step.tool_args).length > 0 && (
+                                  <details className="group/req">
+                                    <summary className="flex items-center gap-2 cursor-pointer font-medium text-muted-foreground hover:text-foreground py-1">
+                                      <div className="transition-transform group-open/req:rotate-90">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                      </div>
+                                      <span>Request Parameters</span>
+                                    </summary>
+                                    <div className="mt-1 ml-4 bg-muted/20 rounded-md p-2">
+                                      <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
+                                        {JSON.stringify(message.step.tool_args, null, 2)}
+                                      </pre>
                                     </div>
-                                    <span>Request Parameters</span>
-                                  </summary>
-                                  <div className="mt-1 ml-4 bg-muted/20 rounded-md p-2">
-                                    <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
-                                      {JSON.stringify(message.step.tool_args, null, 2)}
+                                  </details>
+                                )}
+
+                                {/* Output Section - Collapsible */}
+                                {message.step.result && (
+                                  <details className="group/out" open={message.a2uiMessages && message.a2uiMessages.length > 0}>
+                                    <summary className="flex items-center gap-2 cursor-pointer font-medium text-muted-foreground hover:text-foreground py-1">
+                                      <div className="transition-transform group-open/out:rotate-90">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                      </div>
+                                      <span>Output</span>
+                                      <Badge variant="secondary" className="text-[9px] h-4 px-1">
+                                        {message.step.result.length > 1000 ? `${(message.step.result.length / 1000).toFixed(1)}k chars` : `${message.step.result.length} chars`}
+                                      </Badge>
+                                    </summary>
+                                    <div className="mt-1 ml-4">
+                                      {message.a2uiMessages && message.a2uiMessages.length > 0 ? (
+                                        <A2UIRenderer
+                                          messages={message.a2uiMessages}
+                                          onAction={handleA2UIAction}
+                                          variant="minimal"
+                                        />
+                                      ) : (
+                                        <div className="bg-muted/20 rounded-md p-2">
+                                          <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap break-words max-h-60 overflow-y-auto">
+                                            {(() => {
+                                              try {
+                                                const parsed = JSON.parse(message.step.result);
+                                                return JSON.stringify(parsed, null, 2);
+                                              } catch {
+                                                return message.step.result;
+                                              }
+                                            })()}
+                                          </pre>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </details>
+                                )}
+
+                                {/* Error Section */}
+                                {message.step.error && (
+                                  <div className="bg-red-50/50 dark:bg-red-950/20 rounded-md p-2">
+                                    <div className="text-[10px] font-semibold text-red-600 dark:text-red-400 mb-1 flex items-center gap-1">
+                                      <AlertTriangle className="h-3 w-3" />
+                                      Error
+                                    </div>
+                                    <pre className="text-[10px] font-mono text-red-500 dark:text-red-400 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
+                                      {message.step.error}
                                     </pre>
                                   </div>
-                                </details>
-                              )}
-
-                              {/* Output Section - Collapsible */}
-                              {message.step.result && (
-                                <details className="group/out" open={message.a2uiMessages && message.a2uiMessages.length > 0}>
-                                  <summary className="flex items-center gap-2 cursor-pointer font-medium text-muted-foreground hover:text-foreground py-1">
-                                    <div className="transition-transform group-open/out:rotate-90">
-                                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                                    </div>
-                                    <span>Output</span>
-                                    <Badge variant="secondary" className="text-[9px] h-4 px-1">
-                                      {message.step.result.length > 1000 ? `${(message.step.result.length / 1000).toFixed(1)}k chars` : `${message.step.result.length} chars`}
-                                    </Badge>
-                                  </summary>
-                                  <div className="mt-1 ml-4">
-                                    {message.a2uiMessages && message.a2uiMessages.length > 0 ? (
-                                      <A2UIRenderer
-                                        messages={message.a2uiMessages}
-                                        onAction={handleA2UIAction}
-                                        variant="minimal"
-                                      />
-                                    ) : (
-                                      <div className="bg-muted/20 rounded-md p-2">
-                                        <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap break-words max-h-60 overflow-y-auto">
-                                          {(() => {
-                                            try {
-                                              const parsed = JSON.parse(message.step.result);
-                                              return JSON.stringify(parsed, null, 2);
-                                            } catch {
-                                              return message.step.result;
-                                            }
-                                          })()}
-                                        </pre>
-                                      </div>
-                                    )}
-                                  </div>
-                                </details>
-                              )}
-
-                              {/* Error Section */}
-                              {message.step.error && (
-                                <div className="bg-red-50/50 dark:bg-red-950/20 rounded-md p-2">
-                                  <div className="text-[10px] font-semibold text-red-600 dark:text-red-400 mb-1 flex items-center gap-1">
-                                    <AlertTriangle className="h-3 w-3" />
-                                    Error
-                                  </div>
-                                  <pre className="text-[10px] font-mono text-red-500 dark:text-red-400 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
-                                    {message.step.error}
-                                  </pre>
-                                </div>
-                              )}
-                            </div>
-                          </details>
-                        </div>
-                      ) : message.message_type === "thinking" ? (
-                        <ThinkingItem
-                          content={message.content}
-                          // Use index from map callback if available, otherwise just check last
-                          isFinished={message.id !== messages[messages.length - 1].id || !isLoading}
-                        />
-                      ) : (
-                        message.content && (
-                          !message.a2uiMessages ||
-                          message.a2uiMessages.length === 0 ||
-                          (message.content.trim() && message.content.length < 200)
-                        ) && (
-                          <ReactMarkdown
-                            className="prose dark:prose-invert max-w-none text-sm break-words prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground"
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              pre: ({ node, ...props }) => (
-                                <div className="overflow-x-auto w-full my-2 rounded-lg p-3 bg-muted/60 border border-border/30">
-                                  <pre className="whitespace-pre-wrap break-words text-xs" {...props} />
-                                </div>
-                              ),
-                              code: ({ node, inline, ...props }: any) =>
-                                inline ? (
-                                  <code className="rounded px-1.5 py-0.5 text-xs break-all font-mono bg-muted/80 border border-border/30" {...props} />
-                                ) : (
-                                  <code className="block whitespace-pre-wrap break-words text-xs font-mono" {...props} />
-                                )
-                            }}
-                          >
-                            {message.content}
-                          </ReactMarkdown>
-                        )
-                      )}
-                      {/* Only render A2UI separately if not part of a step (already rendered in step details) */}
-                      {message.a2uiMessages && message.a2uiMessages.length > 0 && !message.step && (
-                        <div className={cn(
-                          "w-full",
-                          message.content && message.content.trim() && message.content.length < 200 ? "mt-4" : ""
-                        )}>
-                          <A2UIRenderer
-                            messages={message.a2uiMessages}
-                            onAction={handleA2UIAction}
-                            variant="minimal"
+                                )}
+                              </div>
+                            </details>
+                          </div>
+                        ) : message.message_type === "thinking" ? (
+                          <ThinkingItem
+                            content={message.content}
+                            // Use index from map callback if available, otherwise just check last
+                            isFinished={message.id !== messages[messages.length - 1].id || !isLoading}
                           />
-                        </div>
+                        ) : (
+                          message.content && (
+                            !message.a2uiMessages ||
+                            message.a2uiMessages.length === 0 ||
+                            (message.content.trim() && message.content.length < 200)
+                          ) && (
+                            <ReactMarkdown
+                              className="prose dark:prose-invert max-w-none text-sm break-words prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground"
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                pre: ({ node, ...props }) => (
+                                  <div className="overflow-x-auto w-full my-2 rounded-lg p-3 bg-muted/60 border border-border/30">
+                                    <pre className="whitespace-pre-wrap break-words text-xs" {...props} />
+                                  </div>
+                                ),
+                                code: ({ node, inline, ...props }: any) =>
+                                  inline ? (
+                                    <code className="rounded px-1.5 py-0.5 text-xs break-all font-mono bg-muted/80 border border-border/30" {...props} />
+                                  ) : (
+                                    <code className="block whitespace-pre-wrap break-words text-xs font-mono" {...props} />
+                                  )
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
+                          )
+                        )}
+                        {/* Only render A2UI separately if not part of a step (already rendered in step details) */}
+                        {message.a2uiMessages && message.a2uiMessages.length > 0 && !message.step && (
+                          <div className={cn(
+                            "w-full",
+                            message.content && message.content.trim() && message.content.length < 200 ? "mt-4" : ""
+                          )}>
+                            <A2UIRenderer
+                              messages={message.a2uiMessages}
+                              onAction={handleA2UIAction}
+                              variant="minimal"
+                            />
+                          </div>
+                        )}
+                      </div>
+                      {/* Only show timestamp for non-system messages */}
+                      {message.role !== "system" && message.message_type !== "thinking" && (
+                        <p className="text-[10px] text-muted-foreground">
+                          {message.timestamp ? new Date(message.timestamp).toLocaleTimeString() : ''}
+                        </p>
                       )}
                     </div>
-                    {/* Only show timestamp for non-system messages */}
-                    {message.role !== "system" && message.message_type !== "thinking" && (
-                      <p className="text-[10px] text-muted-foreground">
-                        {message.timestamp ? new Date(message.timestamp).toLocaleTimeString() : ''}
-                      </p>
-                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
-              {/* Approval Required UI - Just the action buttons */}
               {/* Approval Required UI */}
               {pendingApproval && (
                 <div className="flex gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300 pl-2">

@@ -1,5 +1,4 @@
-use crate::models::{NewTelegramConfig, TelegramConfig, UpdateTelegramConfig};
-use crate::schema;
+use anyagents::models::{NewTelegramConfig, TelegramConfig, UpdateTelegramConfig};
 use crate::AppState;
 use diesel::prelude::*;
 use tauri::State;
@@ -11,7 +10,7 @@ pub async fn create_telegram_config(
     agent_id: String,
     allowed_chat_ids: Option<String>,
 ) -> Result<TelegramConfig, String> {
-    use schema::telegram_configs;
+    use anyagents::schema::telegram_configs;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -42,7 +41,7 @@ pub async fn create_telegram_config(
 pub async fn get_telegram_configs(
     state: State<'_, AppState>,
 ) -> Result<Vec<TelegramConfig>, String> {
-    use schema::telegram_configs::dsl::*;
+    use anyagents::schema::telegram_configs::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
     telegram_configs
@@ -55,7 +54,7 @@ pub async fn get_telegram_config(
     state: State<'_, AppState>,
     config_id: String,
 ) -> Result<TelegramConfig, String> {
-    use schema::telegram_configs::dsl::*;
+    use anyagents::schema::telegram_configs::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
     telegram_configs
@@ -73,7 +72,7 @@ pub async fn update_telegram_config(
     new_is_active: Option<i32>,
     new_allowed_chat_ids: Option<String>,
 ) -> Result<TelegramConfig, String> {
-    use schema::telegram_configs::dsl::*;
+    use anyagents::schema::telegram_configs::dsl::*;
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
 
@@ -101,7 +100,7 @@ pub async fn delete_telegram_config(
     state: State<'_, AppState>,
     config_id: String,
 ) -> Result<(), String> {
-    use schema::telegram_configs::dsl::*;
+    use anyagents::schema::telegram_configs::dsl::*;
 
     // Stop bot if running
     let _ = state.telegram_manager.stop_bot(&config_id).await;

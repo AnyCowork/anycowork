@@ -331,10 +331,35 @@ export const anycoworkApi = {
   healthCheck: async () => ({ status: 'ok' }),
 
   // Tasks
-  listTasks: async (_sessionId?: string, _status?: string) => ({ tasks: [] as Task[], count: 0 }),
-  createTask: async (_data: TaskCreate) => ({} as Task),
-  updateTask: async (_taskId: string, _data: TaskUpdate) => ({} as Task),
-  deleteTask: async (_taskId: string) => ({ success: true }),
+  listTasks: async (sessionId?: string, status?: string) => {
+    const tasks = await invoke<Task[]>('list_tasks', {
+      sessionIdFilter: sessionId,
+      statusFilter: status
+    });
+    return { tasks, count: tasks.length };
+  },
+
+  createTask: async (data: TaskCreate) => {
+    return invoke<Task>('create_task', {
+      titleVal: data.title,
+      descriptionVal: data.description,
+      priorityVal: data.priority,
+      sessionIdVal: data.session_id,
+      agentIdVal: data.agent_id
+    });
+  },
+
+  updateTask: async (taskId: string, data: TaskUpdate) => {
+    return invoke<Task>('update_task', {
+      taskId,
+      data
+    });
+  },
+
+  deleteTask: async (taskId: string) => {
+    await invoke('delete_task', { taskId });
+    return { success: true };
+  },
 
   // Configuration
   getAIConfig: async () => ({

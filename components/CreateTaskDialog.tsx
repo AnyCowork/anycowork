@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useCreateTask } from "@/hooks/use-tasks";
+import { useCreateTask } from "@/hooks/useTasks";
 import { Plus, Loader2 } from "lucide-react";
 import {
     Select,
@@ -69,36 +69,28 @@ export function CreateTaskDialog() {
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="title" className="text-right">
-                                Title
-                            </Label>
+                        <div className="grid gap-2">
+                            <Label htmlFor="title">Title</Label>
                             <Input
                                 id="title"
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
-                                className="col-span-3"
                                 placeholder="e.g. Research competitor pricing"
                             />
                         </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="description" className="text-right">
-                                Description
-                            </Label>
+                        <div className="grid gap-2">
+                            <Label htmlFor="description">Description</Label>
                             <Textarea
                                 id="description"
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
-                                className="col-span-3"
                                 placeholder="Optional details..."
                             />
                         </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="priority" className="text-right">
-                                Priority
-                            </Label>
+                        <div className="grid gap-2">
+                            <Label htmlFor="priority">Priority</Label>
                             <Select value={priority} onValueChange={setPriority}>
-                                <SelectTrigger className="col-span-3">
+                                <SelectTrigger>
                                     <SelectValue placeholder="Select priority" />
                                 </SelectTrigger>
                                 <SelectContent>

@@ -1,7 +1,7 @@
 use anycowork::commands::agents::{chat_internal, create_agent};
 use anycowork::commands::sessions::create_session;
-use anycowork::database::create_test_pool;
-use anycowork::permissions::PermissionManager;
+use anyagents::database::create_test_pool;
+use anyagents::permissions::PermissionManager;
 use anycowork::AppState;
 use std::sync::Arc;
 use tauri::test::mock_builder;
