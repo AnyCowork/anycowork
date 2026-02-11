@@ -27,8 +27,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let setup_msg = json!({
         "setup": {
             "model": format!("models/{}", model),
-            "generation_config": {
-                "response_modalities": ["AUDIO"]
+            "generationConfig": {
+                "responseModalities": ["AUDIO"], 
+                "speechConfig": {
+                    "voiceConfig": {
+                        "prebuiltVoiceConfig": {
+                            "voiceName": "Aoede"
+                        }
+                    }
+                }
             }
         }
     });

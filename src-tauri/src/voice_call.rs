@@ -86,12 +86,12 @@ impl VoiceCallSession {
         let setup_msg = json!({
             "setup": {
                 "model": format!("models/{}", model),
-                "generation_config": {
-                    "response_modalities": ["AUDIO"],
-                    "speech_config": {
-                        "voice_config": {
-                            "prebuilt_voice_config": {
-                                "voice_name": "Aoede" // Can be customized per agent
+                "generationConfig": {
+                    "responseModalities": ["AUDIO"],
+                    "speechConfig": {
+                        "voiceConfig": {
+                            "prebuiltVoiceConfig": {
+                                "voiceName": "Aoede" // Can be customized per agent
                             }
                         }
                     }
@@ -102,7 +102,7 @@ impl VoiceCallSession {
         // Add system instruction if provided
         let setup_msg = if let Some(system_instruction) = &self.config.system_instruction {
             let mut msg = setup_msg;
-            msg["setup"]["system_instruction"] = json!({
+            msg["setup"]["systemInstruction"] = json!({
                 "parts": [{
                     "text": format!("You are {}. {}", self.config.agent_name, system_instruction)
                 }]
@@ -127,56 +127,16 @@ impl VoiceCallSession {
 
         // Spawn task to handle incoming messages from Gemini
         let event_tx_clone = event_tx.clone();
+        let setup_complete_clone = setup_complete.clone();
         tokio::spawn(async move {
             while let Some(msg) = read.next().await {
                 match msg {
                     Ok(Message::Text(text)) => {
-                        log::info!("Received from Gemini: {}", text); // Log everything
-                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) {
-                            // Check for error at top level
-                            if let Some(error) = parsed.get("error") {
-                                log::error!("Gemini API Error: {:?}", error);
-                                let _ = event_tx_clone.send(VoiceCallEvent::Error {
-                                    message: format!("Gemini Error: {}", error),
-                                });
-                            }
-
-                            // Handle setup complete
-                            if parsed.get("setupComplete").is_some() {
-                                log::info!("Setup complete!");
-                                let _ = event_tx_clone.send(VoiceCallEvent::Connected);
-                                setup_complete.notify_one();
-                            }
-
-                            // Handle audio response
-                            if let Some(server_content) = parsed.get("serverContent") {
-                                if let Some(model_turn) = server_content.get("modelTurn") {
-                                    if let Some(parts) = model_turn.get("parts") {
-                                        if let Some(parts_array) = parts.as_array() {
-                                            for part in parts_array {
-                                                // Extract audio data
-                                                if let Some(inline_data) = part.get("inlineData") {
-                                                    if let Some(data_str) = inline_data.get("data").and_then(|d| d.as_str()) {
-                                                        // Decode base64 audio
-                                                        if let Ok(audio_bytes) = general_purpose::STANDARD.decode(data_str) {
-                                                            let _ = event_tx_clone.send(VoiceCallEvent::AudioData {
-                                                                data: audio_bytes,
-                                                            });
-                                                        }
-                                                    }
-                                                }
-
-                                                // Extract text transcription
-                                                if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
-                                                    let _ = event_tx_clone.send(VoiceCallEvent::Transcription {
-                                                        text: text.to_string(),
-                                                    });
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                        handle_message(&text, &event_tx_clone, &setup_complete);
+                    }
+                    Ok(Message::Binary(bin)) => {
+                        if let Ok(text) = String::from_utf8(bin) {
+                            handle_message(&text, &event_tx_clone, &setup_complete);
                         }
                     }
                     Ok(Message::Close(_)) => {
@@ -253,5 +213,60 @@ impl VoiceCallSession {
 
     pub async fn is_running(&self) -> bool {
         *self.is_running.lock().await
+    }
+}
+
+// Helper function to handle incoming messages
+fn handle_message(
+    text: &str,
+    event_tx: &mpsc::UnboundedSender<VoiceCallEvent>,
+    setup_complete: &Arc<Notify>,
+) {
+    log::info!("Received from Gemini: {}", text); // Log everything
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(text) {
+        // Check for error at top level
+        if let Some(error) = parsed.get("error") {
+            log::error!("Gemini API Error: {:?}", error);
+            let _ = event_tx.send(VoiceCallEvent::Error {
+                message: format!("Gemini Error: {}", error),
+            });
+        }
+
+        // Handle setup complete
+        if parsed.get("setupComplete").is_some() {
+            log::info!("Setup complete!");
+            let _ = event_tx.send(VoiceCallEvent::Connected);
+            setup_complete.notify_one();
+        }
+
+        // Handle audio response
+        if let Some(server_content) = parsed.get("serverContent") {
+            if let Some(model_turn) = server_content.get("modelTurn") {
+                if let Some(parts) = model_turn.get("parts") {
+                    if let Some(parts_array) = parts.as_array() {
+                        for part in parts_array {
+                            // Extract audio data
+                            if let Some(inline_data) = part.get("inlineData") {
+                                if let Some(data_str) = inline_data.get("data").and_then(|d| d.as_str()) {
+                                    // Decode base64 audio
+                                    if let Ok(audio_bytes) = general_purpose::STANDARD.decode(data_str) {
+                                        let _ = event_tx.send(VoiceCallEvent::AudioData {
+                                            data: audio_bytes,
+                                        });
+                                    }
+                                }
+                            }
+
+                            // Extract text transcription
+                            if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                                let _ = event_tx.send(VoiceCallEvent::Transcription {
+                                    text: text.to_string(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
