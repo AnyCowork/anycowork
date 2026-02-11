@@ -50,13 +50,23 @@ impl SimpleChatAgent {
             );
         };
 
-        let client = LlmClient::new(&self.provider, &self.model).with_preamble(&preamble);
+        let key_name = match self.provider.as_str() {
+            "openai" => "OPENAI_API_KEY",
+            "gemini" => "GEMINI_API_KEY",
+            "anthropic" => "ANTHROPIC_API_KEY",
+            _ => "",
+        };
+        let api_key = crate::models::settings::get_setting(db_pool, key_name);
+
+        let mut client = LlmClient::new(&self.provider, &self.model).with_preamble(&preamble);
+        if let Some(key) = api_key {
+            client = client.with_api_key(&key);
+        }
         let result = client.stream_chat(message, history, on_token).await;
 
         match result {
             Ok(full_response) => {
-                // Save messages to DB
-                self.save_message(db_pool, "user", message, session_id);
+                // Save assistant response to DB (user message already saved by caller)
                 self.save_message(db_pool, "assistant", &full_response, session_id);
                 Ok(full_response)
             }
@@ -147,6 +157,7 @@ mod tests {
             execution_settings: None,
             scope_type: None,
             workspace_path: None,
+            avatar: None,
         };
 
         diesel::insert_into(agents::table)
@@ -208,6 +219,7 @@ mod tests {
             execution_settings: None,
             scope_type: None,
             workspace_path: None,
+            avatar: None,
         };
 
         diesel::insert_into(agents::table)

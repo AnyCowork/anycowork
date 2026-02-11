@@ -31,6 +31,7 @@ pub struct Agent {
     pub execution_settings: Option<String>,
     pub scope_type: Option<String>,
     pub workspace_path: Option<String>,
+    pub avatar: Option<String>,
 }
 
 #[derive(Insertable, Deserialize)]
@@ -61,6 +62,7 @@ pub struct NewAgent {
     pub execution_settings: Option<String>,
     pub scope_type: Option<String>,
     pub workspace_path: Option<String>,
+    pub avatar: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -91,6 +93,7 @@ pub struct AgentDto {
     pub mcp_servers: Vec<String>,
     pub created_at: i64,
     pub updated_at: i64,
+    pub avatar: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -158,6 +161,7 @@ impl Agent {
                 .unwrap_or_default(),
             created_at: self.created_at,
             updated_at: self.updated_at,
+            avatar: self.avatar,
         }
     }
 }

@@ -172,14 +172,14 @@ function SettingsPage() {
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
       {/* Header */}
       <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="max-w-6xl mx-auto px-8 py-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Shield className="h-6 w-6 text-primary" />
+        <div className="max-w-6xl mx-auto px-6 py-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80">
+              <Shield className="h-4 w-4 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold">Settings</h1>
-              <p className="text-sm text-muted-foreground">
+              <h1 className="text-xl font-bold">Settings</h1>
+              <p className="text-xs text-muted-foreground">
                 Configure your AnyCowork instance
               </p>
             </div>
@@ -188,7 +188,7 @@ function SettingsPage() {
       </div>
 
       {/* Content */}
-      <div className="max-w-6xl mx-auto px-8 py-8">
+      <div className="max-w-6xl mx-auto px-6 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-3 max-w-xl">
             <TabsTrigger value="ai" className="gap-2">
@@ -208,10 +208,10 @@ function SettingsPage() {
           {/* AI Providers Tab */}
           <TabsContent value="ai" className="space-y-6">
             {/* Provider Selection */}
-            <Card className="border-2">
-              <CardHeader>
+            <Card className="border-primary/50">
+              <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
-                  <Brain className="h-5 w-5" />
+                  <Brain className="h-4 w-4" />
                   Active Provider
                 </CardTitle>
                 <CardDescription>
@@ -230,14 +230,14 @@ function SettingsPage() {
             <Card
               className={
                 aiForm.provider === "anthropic"
-                  ? "border-2 border-primary"
+                  ? "border-primary/50"
                   : ""
               }
             >
-              <CardHeader>
+              <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5" />
+                    <Sparkles className="h-4 w-4" />
                     <CardTitle>Anthropic (Claude)</CardTitle>
                   </div>
                   {aiForm.provider === "anthropic" && (
@@ -296,13 +296,13 @@ function SettingsPage() {
             {/* OpenAI Configuration */}
             <Card
               className={
-                aiForm.provider === "openai" ? "border-2 border-primary" : ""
+                aiForm.provider === "openai" ? "border-primary/50" : ""
               }
             >
-              <CardHeader>
+              <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Zap className="h-5 w-5" />
+                    <Zap className="h-4 w-4" />
                     <CardTitle>OpenAI (GPT)</CardTitle>
                   </div>
                   {aiForm.provider === "openai" && (
@@ -359,13 +359,13 @@ function SettingsPage() {
             {/* Gemini Configuration */}
             <Card
               className={
-                aiForm.provider === "gemini" ? "border-2 border-primary" : ""
+                aiForm.provider === "gemini" ? "border-primary/50" : ""
               }
             >
-              <CardHeader>
+              <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Brain className="h-5 w-5" />
+                    <Brain className="h-4 w-4" />
                     <CardTitle>Google (Gemini)</CardTitle>
                   </div>
                   {aiForm.provider === "gemini" && (
@@ -423,7 +423,6 @@ function SettingsPage() {
               <Button
                 onClick={handleSaveAI}
                 disabled={updateAI.isPending}
-                size="lg"
                 className="gap-2"
               >
                 {updateAI.isPending ? (
@@ -444,10 +443,10 @@ function SettingsPage() {
           {/* Execution Settings Tab */}
           <TabsContent value="execution" className="space-y-6">
             {/* Execution Mode Selection */}
-            <Card className="border-2">
-              <CardHeader>
+            <Card className="border-primary/50">
+              <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
-                  <ShieldCheck className="h-5 w-5" />
+                  <ShieldCheck className="h-4 w-4" />
                   Execution Mode
                 </CardTitle>
                 <CardDescription>
@@ -509,9 +508,9 @@ function SettingsPage() {
 
             {/* Whitelisted Commands */}
             <Card>
-              <CardHeader>
+              <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
-                  <Terminal className="h-5 w-5" />
+                  <Terminal className="h-4 w-4" />
                   Whitelisted Commands
                 </CardTitle>
                 <CardDescription>
@@ -553,9 +552,9 @@ function SettingsPage() {
 
             {/* Whitelisted Tools */}
             <Card>
-              <CardHeader>
+              <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
-                  <Wrench className="h-5 w-5" />
+                  <Wrench className="h-4 w-4" />
                   Whitelisted Tools
                 </CardTitle>
                 <CardDescription>
@@ -597,9 +596,9 @@ function SettingsPage() {
 
             {/* Blacklisted Commands (Info Only) */}
             <Card className="border-destructive/20">
-              <CardHeader>
+              <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-destructive">
-                  <ShieldAlert className="h-5 w-5" />
+                  <ShieldAlert className="h-4 w-4" />
                   Blocked Commands
                 </CardTitle>
                 <CardDescription>
@@ -625,11 +624,11 @@ function SettingsPage() {
           {/* Messaging Tab */}
           <TabsContent value="messaging" className="space-y-6">
             {/* Telegram Configuration */}
-            <Card className="border-2">
-              <CardHeader>
+            <Card className="border-primary/50">
+              <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <MessageSquare className="h-5 w-5" />
+                    <MessageSquare className="h-4 w-4" />
                     <CardTitle>Telegram Bot</CardTitle>
                   </div>
                   <Switch
@@ -700,7 +699,6 @@ function SettingsPage() {
               <Button
                 onClick={handleSaveMessaging}
                 disabled={updateMessaging.isPending}
-                size="lg"
                 className="gap-2"
               >
                 {updateMessaging.isPending ? (

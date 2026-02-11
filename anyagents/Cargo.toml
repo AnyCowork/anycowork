@@ -32,3 +32,5 @@ tempfile = "3.24.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
+transcribe-rs = { path = "../thirdparty/transcribe-rs", features = ["parakeet"] }
+dirs = "5.0"

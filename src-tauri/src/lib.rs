@@ -3,6 +3,7 @@ pub mod telegram;
 pub mod events;
 pub mod schema;
 pub mod models;
+pub mod voice_call;
 
 use std::sync::Arc;
 use dashmap::DashMap;
@@ -35,8 +36,8 @@ pub fn run() {
     let pool = anyagents::database::establish_connection();
     crate::database::run_migrations(&pool);
 
-    // Create default agent if none exist
-    anyagents::database::ensure_default_agent(&pool);
+    // Ensure default characters exist
+    anyagents::database::ensure_default_characters(&pool);
 
     let pending_approvals = Arc::new(DashMap::new());
     let telegram_manager = Arc::new(TelegramBotManager::new(pool.clone()));
@@ -54,7 +55,10 @@ pub fn run() {
             telegram_manager,
             permission_manager,
         })
-        .setup(move |_app| {
+        .setup(move |app| {
+            // Initialize voice call state
+            commands::voice::init_voice_state(app);
+
             // Start all active Telegram bots on app startup
             let manager = telegram_manager_clone.clone();
             tauri::async_runtime::spawn(async move {
@@ -146,12 +150,30 @@ pub fn run() {
             commands::transcribe_file,
             commands::check_model_status,
             commands::download_model,
+            commands::get_sample_audio_path,
             // Task commands
             commands::create_task,
             commands::list_tasks,
             commands::update_task,
-            commands::delete_task
-
+            commands::delete_task,
+            // Mail commands
+            commands::get_mail_threads,
+            commands::get_mail_thread_messages,
+            commands::send_mail,
+            commands::reply_to_mail,
+            commands::mark_thread_read,
+            commands::archive_thread,
+            commands::get_unread_mail_count,
+            // Voice call commands
+            commands::start_voice_call,
+            commands::stop_voice_call,
+            commands::send_voice_audio,
+            commands::is_voice_call_active,
+            
+            // Settings commands
+            commands::get_ai_config,
+            commands::update_ai_config,
+            commands::get_available_models,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

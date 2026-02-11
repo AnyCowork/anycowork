@@ -19,6 +19,7 @@ const SkillsPage = lazy(() => import("@/src/routes/SkillsPage"));
 const MCPServersPage = lazy(() => import("@/src/routes/MCPServersPage"));
 const ConversationsPage = lazy(() => import("@/src/routes/ConversationsPage"));
 const AppsPage = lazy(() => import("@/src/routes/AppsPage"));
+const MailboxPage = lazy(() => import("@/src/routes/MailboxPage"));
 const TranscribeTool = lazy(() => import("@/src/components/tools/TranscribeTool").then(module => ({ default: module.TranscribeTool })));
 // const ConnectionsPage = lazy(() => import("@/src/routes/ConnectionsPage"));
 
@@ -53,6 +54,7 @@ function App() {
               <Route path="/" element={<Navigate to="/chat" replace />} />
               <Route element={<MainLayout />}>
                 <Route path="/chat/:sessionId?" element={<ChatPage />} />
+                <Route path="/mailbox" element={<MailboxPage />} />
                 <Route path="/conversations" element={<ConversationsPage />} />
                 <Route path="/agents" element={<AgentsPage />} />
                 <Route path="/skills" element={<SkillsPage />} />

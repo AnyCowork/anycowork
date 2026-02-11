@@ -24,9 +24,8 @@ AnyCowork supports different types of agents for different workflows:
 The default experience. A conversational partner that can use tools when needed. Best for brainstorming, asking questions, and simple tasks.
 
 ### 2. Planning Agent (Coordinator)
-*Coming in v0.2.0*
 
-A high-level coordinator that breaks down complex requests into a plan. It then delegates steps to other agents or executes them sequentially.
+A high-level coordinator that breaks down complex requests into a plan. It uses a **Router** to classify queries as simple or complex, then either responds directly (via SimpleChatAgent) or creates a step-by-step plan and executes each task sequentially.
 
 **Example**: "Refactor the authentication system to use JWTs."
 - **Planner**: "I need to: 1. Update schema, 2. Update backend handlers, 3. Update frontend client."

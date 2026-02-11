@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   Home,
   MessageSquare,
+  Mail,
   FolderOpen,
   Zap,
   Settings,
@@ -34,10 +35,11 @@ interface NavItem {
 
 const workspaceNavigation: NavItem[] = [
   { name: "Chat", href: "/chat", icon: MessageSquare },
+  { name: "Mails", href: "/mailbox", icon: Mail },
 ];
 
 const studioNavigation: NavItem[] = [
-  { name: "Agents", href: "/agents", icon: Bot },
+  { name: "Characters", href: "/agents", icon: Users },
   { name: "Skills", href: "/skills", icon: Hammer },
   { name: "Apps", href: "/apps", icon: LayoutDashboard },
   { name: "Connectors", href: "/mcp", icon: Server },
@@ -55,11 +57,11 @@ export function Sidebar() {
     <div
       className={cn(
         "flex h-full flex-col border-r border-border/60 bg-muted/70 transition-all duration-300 ease-in-out",
-        isCollapsed ? "w-16" : "w-64"
+        isCollapsed ? "w-14" : "w-56"
       )}
     >
       {/* Logo & Toggle Header */}
-      <div className={cn("flex h-14 items-center border-b border-border/50 bg-background/30", isCollapsed ? "justify-center px-0" : "px-4 justify-between")}>
+      <div className={cn("flex h-12 items-center border-b border-border/50 bg-background/30", isCollapsed ? "justify-center px-0" : "px-3 justify-between")}>
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80 shrink-0">
             <Sparkles className="h-4 w-4 text-primary-foreground" />
@@ -67,7 +69,7 @@ export function Sidebar() {
           {!isCollapsed && (
             <div className="overflow-hidden whitespace-nowrap">
               <h1 className="text-sm font-semibold">AnyCowork</h1>
-              <p className="text-xs text-muted-foreground">Your AI Coworker</p>
+              <p className="text-xs text-muted-foreground">Virtual Office inside your PC</p>
             </div>
           )}
         </div>
@@ -100,7 +102,7 @@ export function Sidebar() {
       )}
 
       {/* Navigation Groups */}
-      <nav className="flex-1 overflow-y-auto px-2 space-y-6 pt-2">
+      <nav className="flex-1 overflow-y-auto px-1.5 space-y-4 pt-2">
 
         {/* Workspace */}
         <div className="space-y-1">
@@ -112,8 +114,8 @@ export function Sidebar() {
               <Link key={item.href} to={item.href}>
                 <div
                   className={cn(
-                    "flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-all duration-200",
-                    isCollapsed ? "justify-center px-0" : "px-3",
+                    "flex items-center gap-2.5 rounded-lg py-2 text-sm font-medium transition-all duration-200",
+                    isCollapsed ? "justify-center px-0" : "px-2.5",
                     isActive
                       ? "bg-primary/85 text-primary-foreground shadow-sm"
                       : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
@@ -143,8 +145,8 @@ export function Sidebar() {
               <Link key={item.href} to={item.href}>
                 <div
                   className={cn(
-                    "flex items-center gap-3 rounded-lg py-2 text-sm font-medium transition-all duration-200",
-                    isCollapsed ? "justify-center px-0" : "px-3",
+                    "flex items-center gap-2.5 rounded-lg py-2 text-sm font-medium transition-all duration-200",
+                    isCollapsed ? "justify-center px-0" : "px-2.5",
                     isActive
                       ? "bg-primary/15 text-primary shadow-sm"
                       : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
@@ -169,8 +171,8 @@ export function Sidebar() {
             <Link key={item.href} to={item.href}>
               <div
                 className={cn(
-                  "flex items-center gap-3 rounded-lg py-2 text-sm font-medium transition-colors",
-                  isCollapsed ? "justify-center px-0" : "px-3",
+                  "flex items-center gap-2.5 rounded-lg py-2 text-sm font-medium transition-colors",
+                  isCollapsed ? "justify-center px-0" : "px-2.5",
                   isActive
                     ? "bg-primary/15 text-primary"
                     : "text-muted-foreground hover:bg-background/60 hover:text-foreground"

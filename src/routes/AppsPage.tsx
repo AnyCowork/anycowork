@@ -32,15 +32,15 @@ export default function AppsPage() {
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
       {/* Header */}
       <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto max-w-7xl px-8 py-6">
+        <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80">
-                <Box className="h-5 w-5 text-primary-foreground" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80">
+                <Box className="h-4 w-4 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">Apps & Tools</h1>
-                <p className="text-sm text-muted-foreground">
+                <h1 className="text-xl font-bold">Apps & Tools</h1>
+                <p className="text-xs text-muted-foreground">
                   Productivity tools and AI-powered utilities ready to use
                 </p>
               </div>
@@ -49,7 +49,7 @@ export default function AppsPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl p-8">
+      <div className="mx-auto max-w-7xl p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {APPS.map((app) => (
             <Card
@@ -61,7 +61,7 @@ export default function AppsPage() {
                 <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
               )}
 
-              <CardHeader className="pb-4">
+              <CardHeader className="pb-3">
                 <div className="flex items-center justify-between mb-2">
                   <div className="p-2.5 rounded-xl bg-primary/10 text-primary group-hover:scale-105 transition-transform duration-300">
                     <app.icon className="w-6 h-6" />

@@ -58,8 +58,8 @@ function HomePage() {
 
   if (isLoading) {
     return (
-      <div className="flex-1 overflow-auto p-8">
-        <div className="max-w-6xl mx-auto space-y-8">
+      <div className="flex-1 overflow-auto p-6">
+        <div className="max-w-6xl mx-auto space-y-6">
           <Skeleton className="h-12 w-64" />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1, 2, 3].map((i) => (
@@ -77,11 +77,11 @@ function HomePage() {
 
   return (
     <div className="flex-1 overflow-auto">
-      <div className="max-w-6xl mx-auto p-12 space-y-12">
+      <div className="max-w-6xl mx-auto p-8 space-y-8">
         {/* Header */}
         <div className="space-y-4">
-          <h1 className="text-4xl font-semibold tracking-tight text-foreground">Welcome to AnyCowork</h1>
-          <p className="text-xl text-muted-foreground font-light">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Welcome to AnyCowork</h1>
+          <p className="text-sm text-muted-foreground font-light">
             Your personal, collaborative AI control center.
           </p>
         </div>
@@ -89,8 +89,8 @@ function HomePage() {
         {/* Quick Actions */}
         <div className="flex gap-3">
           <Link to="/settings">
-            <Button variant="outline" className="gap-2" size="lg">
-              <Settings className="h-4 w-4" />
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Settings className="h-3.5 w-3.5" />
               Configure
             </Button>
           </Link>
@@ -101,12 +101,12 @@ function HomePage() {
           {/* Gateway Status */}
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
-                  <Activity className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/50">
+                  <Activity className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <CardTitle className="text-base">Gateway</CardTitle>
+                  <CardTitle className="text-sm">Gateway</CardTitle>
                   <CardDescription className="text-xs">WebSocket Control Plane</CardDescription>
                 </div>
               </div>
@@ -140,12 +140,12 @@ function HomePage() {
           {/* Agent Sessions */}
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/50">
-                  <Bot className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/50">
+                  <Bot className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div>
-                  <CardTitle className="text-base">Agent Sessions</CardTitle>
+                  <CardTitle className="text-sm">Agent Sessions</CardTitle>
                   <CardDescription className="text-xs">Active AI Conversations</CardDescription>
                 </div>
               </div>
@@ -153,7 +153,7 @@ function HomePage() {
             <CardContent className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Total</span>
-                <span className="text-2xl font-semibold">{sessions.length}</span>
+                <span className="text-xl font-semibold">{sessions.length}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Active</span>
@@ -165,12 +165,12 @@ function HomePage() {
           {/* AI Provider */}
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
-                  <Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/50">
+                  <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <CardTitle className="text-base">AI Provider</CardTitle>
+                  <CardTitle className="text-sm">AI Provider</CardTitle>
                   <CardDescription className="text-xs">Current Model</CardDescription>
                 </div>
               </div>
@@ -190,10 +190,10 @@ function HomePage() {
 
         {/* Messaging Platforms */}
         <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-emerald-100/50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">
-                <Send className="h-5 w-5" />
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-emerald-100/50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">
+                <Send className="h-4 w-4" />
               </div>
               <div>
                 <CardTitle>Messaging Platforms</CardTitle>
@@ -206,10 +206,10 @@ function HomePage() {
           <CardContent>
             <div className="grid grid-cols-1 gap-4">
               {/* Telegram */}
-              <div className="p-4 rounded-lg border">
-                <div className="flex items-center justify-between mb-3">
+              <div className="p-3 rounded-lg border">
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <MessageSquare className="h-5 w-5" />
+                    <MessageSquare className="h-4 w-4" />
                     <span className="font-medium">Telegram</span>
                   </div>
                   {messagingData?.telegram?.connected ? (
@@ -244,7 +244,7 @@ function HomePage() {
         {/* Recent Sessions */}
         {recentSessions.length > 0 && (
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle>Recent Sessions</CardTitle>
             </CardHeader>
             <CardContent>
@@ -252,9 +252,9 @@ function HomePage() {
                 {recentSessions.map((session) => (
                   <div
                     key={session.id}
-                    className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent transition-colors"
+                    className="flex items-center gap-2.5 p-2.5 rounded-lg border hover:bg-accent transition-colors"
                   >
-                    <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/50">
+                    <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/50">
                       <Bot className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -276,17 +276,17 @@ function HomePage() {
         {/* Getting Started */}
         {sessions.length === 0 && (
           <Card>
-            <CardContent className="text-center py-12">
-              <div className="p-4 rounded-full bg-muted w-fit mx-auto mb-4">
-                <Zap className="h-12 w-12 text-muted-foreground" />
+            <CardContent className="text-center py-8">
+              <div className="p-3 rounded-full bg-muted w-fit mx-auto mb-3">
+                <Zap className="h-8 w-8 text-muted-foreground" />
               </div>
-              <h3 className="text-xl font-semibold mb-2">Get Started with AnyCowork</h3>
-              <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+              <h3 className="text-lg font-semibold mb-2">Get Started with AnyCowork</h3>
+              <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
                 Configure your messaging platforms to begin using your AI assistant.
               </p>
               <Link to="/settings">
-                <Button variant="outline" className="gap-2">
-                  <Settings className="h-4 w-4" />
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <Settings className="h-3.5 w-3.5" />
                   Settings
                 </Button>
               </Link>

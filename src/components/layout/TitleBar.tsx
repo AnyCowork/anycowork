@@ -53,9 +53,9 @@ export function TitleBar() {
         <div
             data-tauri-drag-region
             onPointerDown={handleDrag}
-            className="h-9 flex justify-between items-center bg-muted/80 border-b border-border/60 select-none w-full cursor-default rounded-t-xl flex-shrink-0"
+            className="h-8 flex justify-between items-center bg-muted/80 border-b border-border/60 select-none w-full cursor-default rounded-t-xl flex-shrink-0"
         >
-            <div className="flex items-center px-4 pointer-events-none">
+            <div className="flex items-center px-3 pointer-events-none">
                 <span className="text-xs font-semibold text-foreground/70">
                     AnyCowork
                 </span>
@@ -65,7 +65,7 @@ export function TitleBar() {
                 {isDevMode && (
                     <button
                         onClick={handleToggleDevtools}
-                        className="inline-flex justify-center items-center h-full w-10 hover:bg-accent focus:outline-none transition-colors"
+                        className="inline-flex justify-center items-center h-full w-9 hover:bg-accent focus:outline-none transition-colors"
                         title="Toggle Debug Console"
                     >
                         <Bug className="h-4 w-4" strokeWidth={1.5} />
@@ -73,7 +73,7 @@ export function TitleBar() {
                 )}
                 <button
                     onClick={handleToggleTheme}
-                    className="inline-flex justify-center items-center h-full w-10 hover:bg-accent focus:outline-none transition-colors"
+                    className="inline-flex justify-center items-center h-full w-9 hover:bg-accent focus:outline-none transition-colors"
                     title={`Theme: ${theme} (click to cycle)`}
                 >
                     {theme === "system" ? (
@@ -86,19 +86,19 @@ export function TitleBar() {
                 </button>
                 <button
                     onClick={handleMinimize}
-                    className="inline-flex justify-center items-center h-full w-10 hover:bg-accent focus:outline-none transition-colors"
+                    className="inline-flex justify-center items-center h-full w-9 hover:bg-accent focus:outline-none transition-colors"
                 >
                     <Minus className="h-4 w-4" />
                 </button>
                 <button
                     onClick={handleMaximize}
-                    className="inline-flex justify-center items-center h-full w-10 hover:bg-accent focus:outline-none transition-colors"
+                    className="inline-flex justify-center items-center h-full w-9 hover:bg-accent focus:outline-none transition-colors"
                 >
                     <Square className="h-3 w-3" />
                 </button>
                 <button
                     onClick={handleClose}
-                    className="inline-flex justify-center items-center h-full w-10 hover:bg-destructive hover:text-destructive-foreground focus:outline-none transition-colors rounded-tr-xl"
+                    className="inline-flex justify-center items-center h-full w-9 hover:bg-destructive hover:text-destructive-foreground focus:outline-none transition-colors rounded-tr-xl"
                 >
                     <X className="h-4 w-4" />
                 </button>

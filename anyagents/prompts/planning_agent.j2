@@ -3,6 +3,11 @@ Your goal is to break down a complex user request into a list of atomic, executa
 Each task must be clear and self-contained.
 Define dependencies between tasks where necessary (e.g., you cannot analyze a file before reading it).
 
+{% if context %}
+CONTEXT / CONVERSATION HISTORY:
+{{ context }}
+{% endif %}
+
 {% if scratchpad %}
 CURRENT PLAN STATUS:
 {{ scratchpad }}

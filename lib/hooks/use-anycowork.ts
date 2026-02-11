@@ -3,7 +3,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { anycoworkApi, AIConfig, MessagingConfig, Agent, AgentCreate, AgentUpdate, ExecutionMode, ExecutionSettingsUpdate } from '../anycowork-api';
+import { anycoworkApi, AIConfig, MessagingConfig, Agent, AgentCreate, AgentUpdate, ExecutionMode, ExecutionSettingsUpdate, MailThread, MailMessage } from '../anycowork-api';
 import { toast } from 'sonner';
 
 // Query keys
@@ -21,6 +21,9 @@ export const queryKeys = {
   agentSkills: (id: string) => ['agents', id, 'skills'],
   agentMCP: (id: string) => ['agents', id, 'mcp'],
   agentMessaging: (id: string) => ['agents', id, 'messaging'],
+  mailThreads: (accountId?: string, folder?: string, isArchived?: boolean) => ['mail', 'threads', accountId, folder, isArchived],
+  mailMessages: (threadId: string) => ['mail', 'messages', threadId],
+  unreadMailCount: (accountId?: string) => ['mail', 'unread', accountId],
 };
 
 // Gateway hooks
@@ -181,11 +184,11 @@ export function useCreateAgent() {
     mutationFn: (data: AgentCreate) => anycoworkApi.createAgent(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.agents });
-      toast.success('Agent created successfully');
+      toast.success('Character created successfully');
     },
     onError: (error: Error | string) => {
       const msg = error instanceof Error ? error.message : String(error);
-      toast.error(`Failed to create agent: ${msg}`);
+      toast.error(`Failed to create character: ${msg}`);
     },
   });
 }
@@ -199,11 +202,11 @@ export function useUpdateAgent() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.agents });
       queryClient.invalidateQueries({ queryKey: queryKeys.agent(variables.agentId) });
-      toast.success('Agent updated successfully');
+      toast.success('Character updated successfully');
     },
     onError: (error: Error | string) => {
       const msg = error instanceof Error ? error.message : String(error);
-      toast.error(`Failed to update agent: ${msg}`);
+      toast.error(`Failed to update character: ${msg}`);
     },
   });
 }
@@ -215,11 +218,11 @@ export function useDeleteAgent() {
     mutationFn: anycoworkApi.deleteAgent,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.agents });
-      toast.success('Agent deleted successfully');
+      toast.success('Character deleted successfully');
     },
     onError: (error: Error | string) => {
       const msg = error instanceof Error ? error.message : String(error);
-      toast.error(`Failed to delete agent: ${msg}`);
+      toast.error(`Failed to delete character: ${msg}`);
     },
   });
 }
@@ -422,6 +425,93 @@ export function useAvailableModels() {
   return useQuery({
     queryKey: queryKeys.availableModels,
     queryFn: anycoworkApi.getAvailableModels,
+  });
+}
+
+// Mail hooks
+export function useMailThreads(accountId?: string, folder?: string, isArchived?: boolean) {
+  return useQuery({
+    queryKey: queryKeys.mailThreads(accountId, folder, isArchived),
+    queryFn: () => anycoworkApi.getMailThreads(accountId, folder, isArchived),
+    refetchInterval: 5000,
+  });
+}
+
+export function useMailMessages(threadId: string) {
+  return useQuery({
+    queryKey: queryKeys.mailMessages(threadId),
+    queryFn: () => anycoworkApi.getMailThreadMessages(threadId),
+    enabled: !!threadId,
+    refetchInterval: 5000,
+  });
+}
+
+export function useUnreadMailCount(accountId?: string) {
+  return useQuery({
+    queryKey: queryKeys.unreadMailCount(accountId),
+    queryFn: () => anycoworkApi.getUnreadMailCount(accountId),
+    refetchInterval: 10000,
+  });
+}
+
+export function useSendMail() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ fromAgentId, toAgentId, subject, body }: { fromAgentId: string | null; toAgentId: string | null; subject: string; body: string }) =>
+      anycoworkApi.sendMail(fromAgentId, toAgentId, subject, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mail'] });
+      toast.success('Email sent');
+    },
+    onError: (error: Error | string) => {
+      const msg = error instanceof Error ? error.message : String(error);
+      toast.error(`Failed to send email: ${msg}`);
+    },
+  });
+}
+
+export function useReplyToMail() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ threadId, fromAgentId, content }: { threadId: string; fromAgentId: string | null; content: string }) =>
+      anycoworkApi.replyToMail(threadId, fromAgentId, content),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mailMessages(variables.threadId) });
+      queryClient.invalidateQueries({ queryKey: ['mail', 'threads'] });
+    },
+    onError: (error: Error | string) => {
+      const msg = error instanceof Error ? error.message : String(error);
+      toast.error(`Failed to send reply: ${msg}`);
+    },
+  });
+}
+
+export function useMarkThreadRead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: anycoworkApi.markThreadRead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mail'] });
+    },
+  });
+}
+
+export function useArchiveThread() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: anycoworkApi.archiveThread,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mail'] });
+      toast.success('Thread archived');
+    },
+    onError: (error: Error | string) => {
+      const msg = error instanceof Error ? error.message : String(error);
+      toast.error(`Failed to archive thread: ${msg}`);
+    },
   });
 }
 

@@ -107,21 +107,21 @@ export default function MCPServersPage() {
 
       {/* Header */}
       <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto max-w-7xl px-8 py-6">
+        <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80">
-                <Server className="h-5 w-5 text-primary-foreground" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80">
+                <Server className="h-4 w-4 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">Connectors - MCP Servers</h1>
-                <p className="text-sm text-muted-foreground">
+                <h1 className="text-xl font-bold">Connectors - MCP Servers</h1>
+                <p className="text-xs text-muted-foreground">
                   Manage global Model Context Protocol servers available to all agents
                 </p>
               </div>
             </div>
-            <Button size="lg" className="gap-2" onClick={() => setIsAddDialogOpen(true)}>
-              <Plus className="h-4 w-4" />
+            <Button size="sm" className="gap-1.5" onClick={() => setIsAddDialogOpen(true)}>
+              <Plus className="h-3.5 w-3.5" />
               Add MCP Server
             </Button>
           </div>
@@ -129,7 +129,7 @@ export default function MCPServersPage() {
       </div>
 
       {/* Main Content */}
-      <div className="mx-auto max-w-7xl p-8">
+      <div className="mx-auto max-w-7xl p-6">
         {isLoading ? (
           <div className="flex justify-center p-12">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -147,12 +147,12 @@ export default function MCPServersPage() {
                   <Card key={server.id} className="group relative overflow-hidden transition-all hover:shadow-lg flex flex-col">
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 to-primary/10">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 to-primary/10">
                             {server.server_type === 'stdio' ? (
-                              <Terminal className="h-5 w-5 text-primary" />
+                              <Terminal className="h-4 w-4 text-primary" />
                             ) : (
-                              <Globe className="h-5 w-5 text-primary" />
+                              <Globe className="h-4 w-4 text-primary" />
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -223,15 +223,15 @@ export default function MCPServersPage() {
               {mcpServers?.length === 0 && (
                 <Card className="col-span-full border-dashed">
                   <CardContent className="flex flex-col items-center justify-center py-16">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
-                      <Server className="h-8 w-8 text-muted-foreground" />
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted mb-3">
+                      <Server className="h-6 w-6 text-muted-foreground" />
                     </div>
                     <h3 className="text-lg font-semibold">No MCP servers configured</h3>
                     <p className="mt-2 text-sm text-muted-foreground text-center max-w-md">
                       MCP (Model Context Protocol) servers extend your agents with additional capabilities like file access, database queries, and more.
                     </p>
-                    <Button onClick={() => setIsAddDialogOpen(true)} className="mt-6 gap-2">
-                      <Plus className="h-4 w-4" />
+                    <Button size="sm" onClick={() => setIsAddDialogOpen(true)} className="mt-4 gap-1.5">
+                      <Plus className="h-3.5 w-3.5" />
                       Add Server
                     </Button>
                   </CardContent>
@@ -332,7 +332,7 @@ function AddServerDialog({ open, onOpenChange, templates, onCreate, isLoading }:
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {templates.map((tpl: McpTemplate) => (
                 <Card key={tpl.id} className="cursor-pointer hover:border-primary transition-colors" onClick={() => loadTemplate(tpl)}>
-                  <CardHeader className="p-4">
+                  <CardHeader className="pb-3">
                     <CardTitle className="text-base">{tpl.name}</CardTitle>
                     <CardDescription className="text-xs">{tpl.description}</CardDescription>
                   </CardHeader>

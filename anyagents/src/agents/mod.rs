@@ -15,7 +15,8 @@ use crate::events::{AgentEvent, ExecutionJob, ExecutionStep, AgentObserver};
 use crate::models::Agent as DbAgent;
 use crate::permissions::PermissionManager;
 use crate::tools::{
-    bash::BashTool, filesystem::FilesystemTool, search::SearchTool, Tool, ToolContext,
+    bash::BashTool, filesystem::FilesystemTool, search::SearchTool,
+    transcribe::TranscribeTool, Tool, ToolContext,
 };
 use diesel::prelude::*;
 use jsonschema::JSONSchema;
@@ -24,7 +25,6 @@ use optimizations::{
     create_assistant_message, create_user_message, get_message_content, optimize_history_by_tokens,
     truncate_message_content, truncate_tool_result, MAX_HISTORY_TOKENS,
 };
-use processor::{StreamChunk, StreamProcessor};
 use rig::client::CompletionClient;
 use rig::client::ProviderClient;
 use crate::llm::LlmClient;
@@ -78,7 +78,42 @@ impl AgentLoop {
             Box::new(FilesystemTool::new(workspace_path.clone())),
             Box::new(SearchTool),
             Box::new(BashTool::new(workspace_path.clone(), execution_mode.clone())),
+            Box::new(TranscribeTool::new()),
         ];
+
+        // Register communication tools (ListColleagues and SendEmail)
+        {
+            let all_agents: Vec<crate::models::Agent> = if let Ok(mut conn) = db_pool.get() {
+                use crate::schema::agents::dsl::*;
+                agents.load::<crate::models::Agent>(&mut conn).unwrap_or_default()
+            } else {
+                vec![]
+            };
+
+            // Add list_colleagues tool first (so agents know to use it)
+            tools.push(Box::new(crate::tools::contacts::ListColleaguesTool::new(
+                db_pool.clone(),
+                agent_db.id.clone(),
+            )));
+
+            // Add send_email tool
+            tools.push(Box::new(crate::tools::email::SendEmailTool::new(
+                db_pool.clone(),
+                agent_db.id.clone(),
+                agent_db.name.clone(),
+                all_agents,
+            )));
+
+            // Add mail reading tools (check inbox/sent, read threads)
+            tools.push(Box::new(crate::tools::mail_reader::MailReaderTool::new(
+                db_pool.clone(),
+                agent_db.id.clone(),
+            )));
+
+            tools.push(Box::new(crate::tools::mail_reader::ReadEmailThreadTool::new(
+                db_pool.clone(),
+            )));
+        }
 
         // Load Assigned Skills
         if let Ok(mut conn) = db_pool.get() {
@@ -204,7 +239,7 @@ impl AgentLoop {
         permission_manager: Arc<PermissionManager>,
         db_pool: DbPool,
     ) {
-        // Initialize job
+        // Initialize job (used for step events; lifecycle managed by Coordinator)
         let job = ExecutionJob {
             id: job_id.clone(),
             session_id: self.session_id.clone(),
@@ -214,11 +249,6 @@ impl AgentLoop {
             current_step_index: 0,
             created_at: chrono::Utc::now().to_rfc3339(),
         };
-
-        let _ = observer.emit(
-            &format!("session:{}", self.session_id),
-            serde_json::to_value(AgentEvent::JobStarted { job: job.clone() }).unwrap(),
-        );
 
         // 1. Add User Message to History
         let truncated_user_message = truncate_message_content(&user_message, "user");
@@ -343,14 +373,15 @@ impl AgentLoop {
                         if chat_attempts >= max_chat_attempts {
                             let _ = observer.emit(
                                 &format!("session:{}", self.session_id),
-                                serde_json::to_value(AgentEvent::Token {
-                                    content: format!(
-                                        "Error: {} after {} attempts.",
-                                        e, max_chat_attempts
+                                serde_json::to_value(AgentEvent::Error {
+                                    message: format!(
+                                        "Failed after {} attempts.",
+                                        max_chat_attempts
                                     ),
+                                    error: Some(e.to_string()),
                                 }).unwrap_or(serde_json::Value::Null),
                             );
-                            println!("CRITICAL AGENT ERROR: {}", e);
+                            error!("CRITICAL AGENT ERROR: {}", e);
                             return; // Fatal error
                         }
 
@@ -609,9 +640,8 @@ impl AgentLoop {
             }
 
             // Not a tool call implies text response
+            // Tokens already streamed in real-time via on_token callback - no need to re-stream
             final_response_text = response.clone();
-            let mut processor = StreamProcessor::new();
-            Self::stream_text(observer, &self.session_id, &response, &mut processor).await;
 
             // Add to history with truncation
             let truncated_final_response =
@@ -621,31 +651,19 @@ impl AgentLoop {
             break;
         }
 
-        // Save to DB
-        save_message(
-            db_pool,
-            "assistant",
-            &final_response_text,
-            &self.session_id,
-            None,
-        );
-
-        let final_msg = if final_response_text.is_empty() {
-            "Task completed successfully. All requested actions have been executed.".to_string()
-        } else {
-            final_response_text.clone()
-        };
+        // Save to DB (only if we have a response)
+        if !final_response_text.is_empty() {
+            save_message(
+                db_pool,
+                "assistant",
+                &final_response_text,
+                &self.session_id,
+                None,
+            );
+        }
 
         // Auto-generate title if this is the first turn
-        // Auto-generate title logic
-        // 1. New Chat (Default) - handled by UI if title is Null
-        // 2. First Message (History < 3) - Set to first message
-        // 3. LLM Generated (History >= 3) - Generate summary
-
         let history_len = self.history.len();
-
-        // We only check DB if we are in the fallback stage (< 3) to strictly avoid overwriting
-        // OR if we are in the generation window (>= 3)
 
         if history_len < 3 {
             // FALLBACK STAGE: Set title to User Message if it's currently default
@@ -657,7 +675,6 @@ impl AgentLoop {
                     .first(&mut conn)
                     .unwrap_or(None);
 
-                // If title is None, empty, or "New Chat" -> Update it
                 match current_title {
                     Some(t) => t.is_empty() || t == "New Chat",
                     None => true,
@@ -673,23 +690,17 @@ impl AgentLoop {
                         diesel::update(sessions::table.filter(sessions::id.eq(&self.session_id)))
                             .set(sessions::title.eq(&fallback_title))
                             .execute(&mut conn);
-                    // EMIT SESSIONS UPDATED
-                    // Core doesn't know about UI event "sessions_updated".
-                    // But we can just use observer to emit generic event or ignore?
-                    // observer.emit("sessions_updated", json!({})) ?
                     let _ = observer.emit("sessions_updated", serde_json::Value::Null);
                 }
             }
         } else if (3..=10).contains(&history_len) {
-            // LLM GENERATION STAGE: Generate summary
-            // We do this a few times (Turn 2, 3, 4) to refine the title as context grows, then stop to stay stable.
-
+            // LLM GENERATION STAGE: Generate summary title in background
             let session_id_clone = self.session_id.clone();
             let model_clone = self.model.clone();
             let provider_clone = self.provider.clone();
             let db_pool_clone = db_pool.clone();
             let observer_clone = observer.clone();
-            let user_query = user_message.clone(); // Capture original query
+            let user_query = user_message.clone();
 
             tokio::spawn(async move {
                 let preamble = "You are a helpful assistant. Generate a very concise title (3-5 words) for a chat session based on the interaction so far. Do not use quotes. Do not say 'Title:'. Just the title.";
@@ -700,7 +711,7 @@ impl AgentLoop {
                         if !api_key.is_empty() {
                             let client = openai::Client::from_env();
                             let agent = client.agent(&model_clone).preamble(preamble).build();
-                            agent.prompt(&user_query).await.ok() // Using user_query as prompt trigger, ideally send history but simple prompt often works for title
+                            agent.prompt(&user_query).await.ok()
                         } else {
                             None
                         }
@@ -709,11 +720,10 @@ impl AgentLoop {
                         let api_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
                         if !api_key.is_empty() {
                             let client = gemini::Client::from_env();
-                            // Use Flash for titles if possible for speed, otherwise fallback to current model
                             let title_model = if model_clone.contains("flash") {
                                 model_clone.clone()
                             } else {
-                                "gemini-3-flash-preview".to_string()
+                                "gemini-2.0-flash".to_string()
                             };
                             let agent = client.agent(&title_model).preamble(preamble).build();
                             agent.prompt(&user_query).await.ok()
@@ -725,7 +735,6 @@ impl AgentLoop {
                         let api_key = std::env::var("ANTHROPIC_API_KEY").unwrap_or_default();
                         if !api_key.is_empty() {
                             let client = anthropic::Client::from_env();
-                            // Use Haiku for titles for speed
                             let title_model = "claude-3-haiku-20240307";
                             let agent = client.agent(title_model).preamble(preamble).build();
                             agent.prompt(&user_query).await.ok()
@@ -739,7 +748,6 @@ impl AgentLoop {
                 if let Some(title) = title_result {
                     let clean_title = title.trim().trim_matches('"').to_string();
                     if !clean_title.is_empty() {
-                        // Update DB
                         use crate::schema::sessions;
                         if let Ok(mut conn) = db_pool_clone.get() {
                             let _ = diesel::update(
@@ -748,61 +756,11 @@ impl AgentLoop {
                             .set(sessions::title.eq(&clean_title))
                             .execute(&mut conn);
 
-                            // Emit update event to refresh sidebar
                             let _ = observer_clone.emit("sessions_updated", serde_json::Value::Null);
                         }
                     }
                 }
             });
-        }
-
-        let _ = observer.emit(
-            &format!("session:{}", self.session_id),
-            serde_json::to_value(AgentEvent::JobCompleted {
-                job: ExecutionJob {
-                    status: "completed".to_string(),
-                    ..job.clone()
-                },
-                message: final_msg,
-            }).unwrap(),
-        );
-    }
-
-    // Keep helper
-    async fn stream_text(
-        observer: &Arc<dyn AgentObserver>,
-        session_id: &str,
-        text: &str,
-        processor: &mut StreamProcessor,
-    ) {
-        // Feed text to processor as chunks (simulating token stream for now since we don't have real stream yet)
-        // In real impl, this would be inside the loop receiving tokens from LLM.
-        // Here we just split by space to simulate.
-        let words: Vec<&str> = text.split_inclusive(' ').collect(); // inclusive keeps separators
-        let mut tokens = words;
-        if tokens.is_empty() && !text.is_empty() {
-            tokens = vec![text];
-        }
-
-        for token in tokens.iter() {
-            let chunks = processor.process(token);
-            for chunk in chunks {
-                match chunk {
-                    StreamChunk::Text(content) => {
-                        let _ = observer.emit(
-                            &format!("session:{}", session_id),
-                            serde_json::to_value(AgentEvent::Token { content }).unwrap_or(serde_json::Value::Null),
-                        );
-                    }
-                    StreamChunk::Thinking(content) => {
-                        let _ = observer.emit(
-                            &format!("session:{}", session_id),
-                            serde_json::to_value(AgentEvent::Thinking { message: content }).unwrap_or(serde_json::Value::Null),
-                        );
-                    }
-                }
-            }
-            tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
         }
     }
 }
@@ -816,6 +774,28 @@ fn save_message(
 ) {
     use crate::schema::messages;
     if let Ok(mut conn) = db_pool.get() {
+        // Check for duplicates in the last 5 messages to prevent accidental re-saves
+        // This can happen if the same message is added to history multiple times
+        let recent_messages: Result<Vec<crate::models::Message>, _> = messages::table
+            .filter(messages::session_id.eq(session_id))
+            .filter(messages::role.eq(role))
+            .order(messages::created_at.desc())
+            .limit(5)
+            .load(&mut conn);
+
+        if let Ok(recent) = recent_messages {
+            // Check if this exact content was just saved
+            let is_duplicate = recent.iter().any(|m| m.content == content);
+            if is_duplicate {
+                log::debug!(
+                    "Skipping duplicate message save: role={}, content_preview={}",
+                    role,
+                    content.chars().take(50).collect::<String>()
+                );
+                return;
+            }
+        }
+
         let msg = crate::models::NewMessage {
             id: Uuid::new_v4().to_string(),
             role: role.to_string(),
@@ -839,7 +819,7 @@ pub mod planner;
 // Updated start_chat_task
 #[allow(clippy::too_many_arguments)]
 
-fn extract_tool_calls(response: &str) -> Vec<Value> {
+pub fn extract_tool_calls(response: &str) -> Vec<Value> {
     let mut calls = Vec::new();
 
     // 1. Try pure JSON first

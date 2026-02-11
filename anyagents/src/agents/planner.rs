@@ -6,14 +6,15 @@ use serde_json::Value;
 pub struct PlanningAgent {
     pub model: String,
     pub provider: String,
+    pub api_key: Option<String>,
 }
 
 impl PlanningAgent {
-    pub fn new(model: String, provider: String) -> Self {
-        Self { model, provider }
+    pub fn new(model: String, provider: String, api_key: Option<String>) -> Self {
+        Self { model, provider, api_key }
     }
 
-    pub async fn plan<F>(&self, objective: &str, on_token: F) -> Result<Plan, String>
+    pub async fn plan<F>(&self, objective: &str, history: &str, on_token: F) -> Result<Plan, String>
     where
         F: Fn(String) + Send + Sync + 'static,
     {
@@ -32,7 +33,8 @@ impl PlanningAgent {
         let preamble = tmpl
             .render(minijinja::context! {
                 schema => schema_str,
-                scratchpad => Value::Null
+                scratchpad => Value::Null,
+                context => history
             })
             .map_err(|e| e.to_string())?;
 
@@ -42,7 +44,10 @@ impl PlanningAgent {
         loop {
             attempts += 1;
 
-            let client = LlmClient::new(&self.provider, &self.model).with_preamble(&preamble);
+            let mut client = LlmClient::new(&self.provider, &self.model).with_preamble(&preamble);
+            if let Some(key) = &self.api_key {
+                client = client.with_api_key(key);
+            }
 
             let result = client.stream_prompt(objective, &on_token).await;
 

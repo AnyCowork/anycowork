@@ -47,6 +47,7 @@ import {
   Keyboard,
   StopCircle,
   Edit2,
+  Phone,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import ReactMarkdown from "react-markdown";
@@ -56,8 +57,10 @@ import { cn } from "@/lib/utils";
 import { useCreateSession, useSessions, useAgents, useDeleteSession, useServerInfo } from "@/lib/hooks/use-anycowork";
 import { anycoworkApi, PlanUpdate } from "@/lib/anycowork-api"; // Added
 import { A2UIRenderer } from "@/components/a2ui/A2UIRenderer";
+import { CharacterPanel } from "@/components/chat/CharacterPanel";
 import { A2UIMessage } from "@/src/lib/a2ui-processor";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { VoiceCallDialog } from "../components/voice/VoiceCallDialog";
 
 // Available AI models (✅ = Tested and verified working)
 const AI_MODELS = [
@@ -154,21 +157,21 @@ function ThinkingItem({ content, isFinished }: ThinkingItemProps) {
   }, [isFinished]);
 
   return (
-    <div className="rounded-lg border bg-muted/20 overflow-hidden mb-2">
+    <div className="overflow-hidden mb-1">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/30 transition-colors text-left"
+        className="flex items-center gap-1.5 px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors text-left"
       >
-        <Brain className={cn("h-3.5 w-3.5", !isFinished && "animate-pulse text-primary")} />
-        <span className="flex-1">Thinking Process</span>
+        <Brain className={cn("h-3 w-3", !isFinished && "animate-pulse text-primary")} />
+        <span>Thinking</span>
         <div className={cn("transition-transform duration-200 text-muted-foreground/50", isOpen ? "rotate-90" : "")}>
-          <ChevronRight className="h-3.5 w-3.5" />
+          <ChevronRight className="h-3 w-3" />
         </div>
       </button>
       {isOpen && (
-        <div className="px-3 pb-2 pt-0 animate-in slide-in-from-top-1 duration-200">
-          <div className="pl-4 border-l-2 border-primary/20 ml-1.5 my-1">
-            <div className="text-xs text-muted-foreground/80 leading-relaxed font-mono whitespace-pre-wrap break-words bg-black/5 dark:bg-white/5 p-2 rounded">
+        <div className="pl-2 animate-in slide-in-from-top-1 duration-200">
+          <div className="pl-3 border-l-2 border-primary/20 max-h-32 overflow-y-auto">
+            <div className="text-[11px] text-muted-foreground/80 leading-relaxed whitespace-pre-wrap break-words py-1">
               {content.replace(/^> 🧠 \*\*Thinking\*\*: /, '')}
             </div>
           </div>
@@ -208,7 +211,9 @@ export default function ChatPage() {
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [isTaskListOpen, setIsTaskListOpen] = useState(true); // Task list panel state
+  const [isCharacterPanelCollapsed, setIsCharacterPanelCollapsed] = useState(false);
   const [currentWorkingDirectory, setCurrentWorkingDirectory] = useState<string>("");
+  const [isVoiceCallOpen, setIsVoiceCallOpen] = useState(false);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -231,11 +236,30 @@ export default function ChatPage() {
     return AI_MODELS.find(m => m.value === selectedModel);
   }, [selectedModel]);
 
+  // Filter sessions by selected agent
+  const filteredSessions = React.useMemo(() => {
+    if (!sessionsData?.sessions) return [];
+    if (!selectedAgentId) return sessionsData.sessions;
+
+    // Filter sessions that belong to the selected agent
+    return sessionsData.sessions.filter(s => s.agent_id === selectedAgentId);
+  }, [sessionsData, selectedAgentId]);
+
+  // Filter open tabs to only show tabs for the selected agent
+  const filteredTabs = React.useMemo(() => {
+    if (!selectedAgentId || !sessionsData?.sessions) return openTabs;
+
+    return openTabs.filter(tabId => {
+      const session = sessionsData.sessions.find(s => s.id === tabId);
+      return session && session.agent_id === selectedAgentId;
+    });
+  }, [openTabs, selectedAgentId, sessionsData]);
+
   // Effects
   useEffect(() => {
     // Set default agent if none selected and agents are available
     if (agents.length > 0 && !selectedAgentId) {
-      // Try to find "AnyCoworker Default" or use first
+      // Select first character (or existing "AnyCoworker Default" for backward compat)
       const defaultAgent = agents.find(a => a.name.includes("Default")) || agents[0];
       if (defaultAgent) {
         console.log("Auto-selecting default agent:", defaultAgent.name);
@@ -515,10 +539,10 @@ export default function ChatPage() {
 
   // Auto-load latest chat or restored active tab when returning to /chat without session ID
   useEffect(() => {
-    if (!sessionId && sessionsData?.sessions && sessionsData.sessions.length > 0) {
+    if (!sessionId && filteredSessions && filteredSessions.length > 0) {
       // 1. Try to restore last active tab
       const lastActiveTab = localStorage.getItem('chatActiveTab');
-      const lastActiveSession = sessionsData.sessions.find(s => s.id === lastActiveTab);
+      const lastActiveSession = filteredSessions.find(s => s.id === lastActiveTab);
 
       if (lastActiveTab && lastActiveSession) {
         navigate(`/chat/${lastActiveTab}`, { replace: true });
@@ -526,7 +550,7 @@ export default function ChatPage() {
       }
 
       // 2. Fallback: Sort sessions by updated_at (most recent first)
-      const sortedSessions = [...sessionsData.sessions].sort((a, b) => {
+      const sortedSessions = [...filteredSessions].sort((a, b) => {
         const dateA = new Date(a.updated_at || a.created_at).getTime();
         const dateB = new Date(b.updated_at || b.created_at).getTime();
         return dateB - dateA;
@@ -538,7 +562,7 @@ export default function ChatPage() {
         navigate(`/chat/${latestSession.id}`, { replace: true });
       }
     }
-  }, [sessionId, sessionsData, navigate]);
+  }, [sessionId, filteredSessions, navigate]);
 
   // Keyboard Shortcuts
   useEffect(() => {
@@ -652,6 +676,31 @@ export default function ChatPage() {
     navigate("/chat/new");
   };
 
+  // Handle character selection from panel — load latest conversation for this character
+  const handleSelectCharacter = (agentId: string) => {
+    // Update selected agent first - this will trigger filteredSessions to update
+    setSelectedAgentId(agentId);
+
+    // Find the most recent session for this character
+    if (sessionsData?.sessions) {
+      const characterSessions = sessionsData.sessions
+        .filter((s: any) => s.agent_id === agentId)
+        .sort((a: any, b: any) => {
+          const dateA = new Date(a.updated_at || a.created_at).getTime();
+          const dateB = new Date(b.updated_at || b.created_at).getTime();
+          return dateB - dateA;
+        });
+
+      if (characterSessions.length > 0) {
+        // Navigate to the latest session for this character
+        navigate(`/chat/${characterSessions[0].id}`);
+      } else {
+        // No conversations yet — create a new session for this character
+        navigate("/chat/new");
+      }
+    }
+  };
+
   const handleDeleteSession = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -709,7 +758,7 @@ export default function ChatPage() {
   const [currentJob, setCurrentJob] = useState<ExecutionJob | null>(null);
   const [pendingApproval, setPendingApproval] = useState<ExecutionStep | null>(null);
   const [activePlan, setActivePlan] = useState<PlanState | null>(null);
-  const [isPlanOpen, setIsPlanOpen] = useState(true);
+  const [isPlanOpen, setIsPlanOpen] = useState(false);
 
   // Auto-expand task list when tasks start running
   useEffect(() => {
@@ -720,8 +769,14 @@ export default function ChatPage() {
 
   // Scroll to approval bar when it appears
   useEffect(() => {
-    if (pendingApproval && approvalBarRef.current) {
-      approvalBarRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (pendingApproval) {
+      setTimeout(() => {
+        if (approvalBarRef.current) {
+          approvalBarRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        } else {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
     }
   }, [pendingApproval]);
 
@@ -1029,7 +1084,7 @@ export default function ChatPage() {
       const errorMessage: Message = {
         id: Date.now().toString(),
         role: "system",
-        content: "Error: No agent selected. Please select an agent from the dropdown above.",
+        content: "Error: No character selected. Please select a character to start chatting.",
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -1337,7 +1392,7 @@ export default function ChatPage() {
       <ConfirmDialog />
       <div className="flex flex-col h-full overflow-hidden">
         {/* Tab Bar */}
-        <div className="border-b border-border/60 bg-muted/50 px-2 py-1.5 flex items-center gap-2">
+        <div className="border-b border-border/60 bg-muted/50 px-2 py-1 flex items-center gap-2">
           <Tabs value={activeTab} className="flex-1 overflow-hidden">
             <div className="flex items-center gap-2">
               <Popover>
@@ -1357,12 +1412,12 @@ export default function ChatPage() {
                   </div>
                   <ScrollArea className="h-[300px]">
                     <div className="p-1 space-y-1">
-                      {sessionsData?.sessions?.length === 0 && (
+                      {filteredSessions?.length === 0 && (
                         <div className="text-xs text-muted-foreground text-center py-8">
-                          No history found
+                          No conversations with {activeAgent?.name || 'this character'} yet
                         </div>
                       )}
-                      {sessionsData?.sessions?.slice().sort((a, b) => b.updated_at - a.updated_at).map(session => (
+                      {filteredSessions?.slice().sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0)).map(session => (
                         <Button
                           key={session.id}
                           variant="ghost"
@@ -1397,11 +1452,25 @@ export default function ChatPage() {
                 <span className="text-sm font-medium">New</span>
               </Button>
 
+              {/* Voice Call Button */}
+              {activeAgent && (
+                <Button
+                  onClick={() => setIsVoiceCallOpen(true)}
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-3 gap-2 shrink-0 bg-green-500/10 hover:bg-green-500/20 text-green-600 hover:text-green-600 transition-all rounded-lg border border-green-500/20"
+                  title={`Call ${activeAgent.name}`}
+                >
+                  <Phone className="h-4 w-4" />
+                  <span className="text-sm font-medium">Call</span>
+                </Button>
+              )}
+
               <div className="w-[1px] h-5 bg-border/60 mx-1" /> {/* Divider */}
 
               <div className="flex-1 overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden">
                 <TabsList className="h-9 bg-transparent p-0 gap-1 inline-flex items-center">
-                  {openTabs.map(tabId => (
+                  {filteredTabs.map(tabId => (
                     <TabsTrigger
                       key={tabId}
                       value={tabId}
@@ -1442,13 +1511,20 @@ export default function ChatPage() {
         </div>
 
         <div className="flex-1 flex flex-row overflow-hidden relative">
-          {/* Sticky Approval Notification Bar */}
+          {/* Character Panel */}
+          <CharacterPanel
+            agents={agents}
+            selectedAgentId={selectedAgentId}
+            onSelectCharacter={handleSelectCharacter}
+            isCollapsed={isCharacterPanelCollapsed}
+            onToggleCollapse={() => setIsCharacterPanelCollapsed(!isCharacterPanelCollapsed)}
+          />
 
           {/* Chat Area */}
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             {/* Messages */}
             <div className={cn(
-              "flex-1 overflow-y-auto p-6 space-y-6"
+              "flex-1 overflow-y-auto p-4 space-y-3"
             )} ref={messagesContainerRef}>
               {(!sessionId || sessionId === 'new') ? (
                 <div className="h-full flex flex-col items-center justify-center text-center space-y-6 max-w-2xl mx-auto">
@@ -1456,7 +1532,7 @@ export default function ChatPage() {
                     <Bot className="h-10 w-10 text-primary-foreground" />
                   </div>
                   <div className="space-y-2">
-                    <h2 className="text-3xl font-bold tracking-tight">Welcome to AnyCowork</h2>
+                    <h2 className="text-2xl font-bold tracking-tight">Welcome to AnyCowork</h2>
                     <p className="text-lg text-muted-foreground">Your AI coworker is ready to assist you</p>
                   </div>
                   <div className="text-sm text-muted-foreground space-y-2">
@@ -1471,7 +1547,7 @@ export default function ChatPage() {
                   </Avatar>
                   <div>
                     <h3 className="font-semibold text-lg">How can I help you?</h3>
-                    <p className="text-sm">Select an agent and start chatting.</p>
+                    <p className="text-sm">Select a character and start chatting.</p>
                   </div>
                 </div>
               ) : null}
@@ -1481,14 +1557,14 @@ export default function ChatPage() {
                   <div
                     key={message.id}
                     className={cn(
-                      "flex gap-4 max-w-full",
+                      "flex gap-3 max-w-full",
                       message.role === "user" && "flex-row-reverse",
-                      (message.role === "system" || message.message_type === "thinking") && "pl-8 gap-2"
+                      (message.role === "system" || message.message_type === "thinking") && "pl-6 gap-1.5"
                     )}
                   >
                     {/* Hide avatar for system/thinking messages */}
                     {message.role !== "system" && message.message_type !== "thinking" && (
-                      <Avatar className="h-8 w-8 shrink-0 border border-border/50">
+                      <Avatar className="h-7 w-7 shrink-0 border border-border/50">
                         <AvatarFallback
                           className={cn(
                             message.role === "user"
@@ -1496,7 +1572,7 @@ export default function ChatPage() {
                               : "bg-muted text-muted-foreground"
                           )}
                         >
-                          {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                          {message.role === "user" ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
                         </AvatarFallback>
                       </Avatar>
                     )}
@@ -1515,8 +1591,8 @@ export default function ChatPage() {
                               ? "" // No background wrapper for tool execution messages
                               : "px-3 py-1.5 text-xs text-muted-foreground bg-muted/50 border border-border/40 rounded-lg"
                             : message.role === "user"
-                              ? "px-4 py-3 bg-secondary/80 text-foreground rounded-2xl rounded-br-sm break-words border border-border/30"
-                              : "px-4 py-3 bg-background text-foreground rounded-2xl rounded-bl-sm max-w-full overflow-hidden break-words border border-border/50"
+                              ? "px-3 py-2 bg-secondary/80 text-foreground rounded-2xl rounded-br-sm break-words border border-border/30"
+                              : "px-3 py-2.5 bg-background text-foreground rounded-2xl rounded-bl-sm max-w-full overflow-hidden break-words border border-border/50"
                         )}
                       >
                         {/* Show text content only if:
@@ -1566,6 +1642,30 @@ export default function ChatPage() {
                                 {new Date(message.timestamp).toLocaleTimeString()}
                               </Badge>
                             </div>
+
+                            {/* Inline file list for list_dir */}
+                            {message.step.tool_name === "filesystem" &&
+                             message.step.tool_args?.operation === "list_dir" &&
+                             message.step.result && (
+                              <div className="px-3 py-1">
+                                <div className="text-[11px] text-muted-foreground space-y-0 max-h-48 overflow-y-auto">
+                                  {(() => {
+                                    try {
+                                      const parsed = JSON.parse(message.step.result);
+                                      if (Array.isArray(parsed)) {
+                                        return parsed.map((item: string, i: number) => (
+                                          <div key={i} className="flex items-center gap-1.5 py-px px-1 rounded hover:bg-muted/30">
+                                            <span className="text-[10px]">{item.includes('.') ? '📄' : '📁'}</span>
+                                            <span className="font-mono text-[11px]">{item}</span>
+                                          </div>
+                                        ));
+                                      }
+                                    } catch {}
+                                    return null;
+                                  })()}
+                                </div>
+                              </div>
+                            )}
 
                             {/* Collapsible Details */}
                             <details className="group">
@@ -1659,7 +1759,7 @@ export default function ChatPage() {
                             (message.content.trim() && message.content.length < 200)
                           ) && (
                             <ReactMarkdown
-                              className="prose dark:prose-invert max-w-none text-sm break-words prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground"
+                              className="prose dark:prose-invert max-w-none text-[13px] break-words prose-p:text-foreground prose-headings:text-foreground prose-strong:text-foreground"
                               remarkPlugins={[remarkGfm]}
                               components={{
                                 pre: ({ node, ...props }) => (
@@ -1706,13 +1806,13 @@ export default function ChatPage() {
 
               {/* Approval Required UI */}
               {pendingApproval && (
-                <div className="flex gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300 pl-2">
+                <div ref={approvalBarRef} className="flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 pl-2">
                   <Avatar className="h-8 w-8 shrink-0">
                     <AvatarFallback className="bg-amber-100 dark:bg-amber-900 border border-amber-200 dark:border-amber-700">
                       <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex flex-col gap-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 px-4 py-3 shadow-sm max-w-[80%] min-w-[300px]">
+                  <div className="flex flex-col gap-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 px-3 py-2.5 shadow-sm max-w-[80%] min-w-[300px]">
                     <div className="flex-1 min-w-0">
                       {renderApprovalContent(pendingApproval)}
                       {thinkingMessage && (
@@ -1825,6 +1925,19 @@ export default function ChatPage() {
 
               {/* Task list moved to input area - removed from message stream */}
 
+              {showScrollButton && (
+                <div className="sticky bottom-2 flex justify-center z-10">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={scrollToBottom}
+                    className="h-7 px-2.5 rounded-full shadow-md border text-xs gap-1 opacity-80 hover:opacity-100"
+                  >
+                    <ArrowDown className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+
               <div ref={messagesEndRef} />
             </div>
 
@@ -1910,7 +2023,7 @@ export default function ChatPage() {
                 )}
 
                 {/* Main Input Form */}
-                <form onSubmit={handleSubmit} className="p-4">
+                <form onSubmit={handleSubmit} className="p-3">
                   {/* Textarea with send button */}
                   <div className="relative">
                     <Textarea
@@ -1925,12 +2038,12 @@ export default function ChatPage() {
                       }}
                       placeholder={
                         isLoading
-                          ? "Agent is thinking..."
+                          ? "Thinking..."
                           : activePlan && activePlan.tasks.some(t => t.status === 'running')
                             ? "Task in progress..."
                             : "Ask anything... (Enter to send, Shift+Enter for new line)"
                       }
-                      className="min-h-[80px] max-h-[200px] resize-none pr-14 pb-3 rounded-xl border-border bg-background shadow-sm focus:border-primary/50 focus:ring-1 focus:ring-primary/20 placeholder:text-muted-foreground/60 transition-all"
+                      className="min-h-[60px] max-h-[200px] resize-none pr-14 pb-3 rounded-xl border-border bg-background shadow-sm focus:border-primary/50 focus:ring-1 focus:ring-primary/20 placeholder:text-muted-foreground/60 transition-all"
                       disabled={isLoading}
                       data-testid="chat-input"
                     />
@@ -2006,7 +2119,7 @@ export default function ChatPage() {
                     <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground bg-background/50 px-2.5 py-1.5 rounded-lg border border-border/50 hover:border-border transition-colors">
                       <Bot className="h-3.5 w-3.5" />
                       <span className="max-w-[150px] truncate font-medium">
-                        {activeAgent?.name || 'Default Agent'}
+                        {activeAgent?.avatar ? `${activeAgent.avatar} ` : ''}{activeAgent?.name || 'Default Character'}
                       </span>
                     </div>
 
@@ -2023,16 +2136,16 @@ export default function ChatPage() {
             </div>
           </div>
 
-          {/* Right Sidebar: Agent Settings Only */}
+          {/* Right Sidebar: Character Settings Only */}
           {activeAgent && (
             <div className={cn(
               "border-l border-border bg-card transition-all duration-300 flex flex-col h-full",
-              isPlanOpen ? "w-80 p-4" : "w-12 py-4 items-center"
+              isPlanOpen ? "w-72 p-3" : "w-10 py-3 items-center"
             )}>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-3">
                 {isPlanOpen && (
-                  <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <Settings className="w-4 h-4" /> Agent Config
+                  <h3 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <Settings className="w-3.5 h-3.5" /> Character Config
                   </h3>
                 )}
                 <Button
@@ -2042,27 +2155,27 @@ export default function ChatPage() {
                   onClick={() => setIsPlanOpen(!isPlanOpen)}
                   title={isPlanOpen ? "Collapse sidebar" : "Expand sidebar"}
                 >
-                  {isPlanOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                  {isPlanOpen ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
                 </Button>
               </div>
 
               {isPlanOpen && (
-                <div className="flex flex-col gap-4 overflow-y-auto">
-                  {/* Agent Config Section */}
+                <div className="flex flex-col gap-3 overflow-y-auto">
+                  {/* Character Config Section */}
                   {activeAgent && (
-                    <div className="space-y-3">
-                      <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                        <Bot className="w-3 h-3" /> Agent Settings
+                    <div className="space-y-2">
+                      <h4 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                        <Bot className="w-3 h-3" /> Character Settings
                       </h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between px-2 py-1.5 bg-muted/50 rounded">
                           <span className="text-muted-foreground">Model</span>
-                          <span className="font-mono text-xs">{activeAgent.ai_config?.model || "N/A"}</span>
+                          <span className="font-mono text-[11px]">{activeAgent.ai_config?.model || "N/A"}</span>
                         </div>
-                        <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
-                          <span className="text-muted-foreground">Approval Mode</span>
+                        <div className="flex items-center justify-between px-2 py-1.5 bg-muted/50 rounded">
+                          <span className="text-muted-foreground">Approval</span>
                           <span className={cn(
-                            "text-xs font-medium px-2 py-0.5 rounded",
+                            "text-[11px] font-medium px-1.5 py-0.5 rounded",
                             (activeAgent as any).execution_settings?.mode === "autopilot" ? "bg-yellow-500/20 text-yellow-600" :
                               (activeAgent as any).execution_settings?.mode === "smart_approval" ? "bg-blue-500/20 text-blue-600" :
                                 "bg-green-500/20 text-green-600"
@@ -2071,10 +2184,10 @@ export default function ChatPage() {
                               (activeAgent as any).execution_settings?.mode === "smart_approval" ? "Smart" : "Manual"}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
-                          <span className="text-muted-foreground">Sandbox Mode</span>
+                        <div className="flex items-center justify-between px-2 py-1.5 bg-muted/50 rounded">
+                          <span className="text-muted-foreground">Sandbox</span>
                           <span className={cn(
-                            "text-xs font-medium px-2 py-0.5 rounded",
+                            "text-[11px] font-medium px-1.5 py-0.5 rounded",
                             (activeAgent as any).execution_settings?.sandbox_mode === "sandbox" ? "bg-green-500/20 text-green-600" :
                               (activeAgent as any).execution_settings?.sandbox_mode === "direct" ? "bg-red-500/20 text-red-600" :
                                 "bg-blue-500/20 text-blue-600"
@@ -2083,10 +2196,10 @@ export default function ChatPage() {
                               (activeAgent as any).execution_settings?.sandbox_mode === "direct" ? "Direct" : "Flexible"}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                        <div className="flex items-center justify-between px-2 py-1.5 bg-muted/50 rounded">
                           <span className="text-muted-foreground">Workflow</span>
                           <span className={cn(
-                            "text-xs font-medium px-2 py-0.5 rounded",
+                            "text-[11px] font-medium px-1.5 py-0.5 rounded",
                             executionMode === "fast" ? "bg-yellow-500/20 text-yellow-600" : "bg-blue-500/20 text-blue-600"
                           )}>
                             {executionMode === "fast" ? "Fast" : "Planning"}
@@ -2100,31 +2213,28 @@ export default function ChatPage() {
                   {activeAgent && (
                     <>
                       <Separator />
-                      <div className="space-y-3">
-                        <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                      <div className="space-y-2">
+                        <h4 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                           <FolderOpen className="w-3 h-3" /> Workspace
                         </h4>
-                        <div className="p-2 bg-muted/50 rounded text-sm space-y-1">
-                          <p className="text-xs text-muted-foreground">Absolute Path:</p>
-                          <code className="font-mono text-xs break-all block bg-background/50 p-1.5 rounded border">
+                        <div className="px-2 py-1.5 bg-muted/50 rounded space-y-1">
+                          <p className="text-[11px] text-muted-foreground">Path:</p>
+                          <code className="font-mono text-[11px] break-all block bg-background/50 p-1.5 rounded border">
                             {(activeAgent as any).workspace_path ||
                               (activeAgent as any).working_directories?.[0] ||
                               currentWorkingDirectory ||
                               "(Loading...)"}
                           </code>
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                           <span>Scope:</span>
                           <span className={cn(
-                            "px-2 py-0.5 rounded font-medium",
+                            "px-1.5 py-0.5 rounded font-medium text-[11px]",
                             (activeAgent as any).scope_type === "global" ? "bg-yellow-500/20 text-yellow-600" : "bg-blue-500/20 text-blue-600"
                           )}>
-                            {(activeAgent as any).scope_type === "global" ? "Global (Full Access)" : "Workspace Only"}
+                            {(activeAgent as any).scope_type === "global" ? "Global" : "Workspace"}
                           </span>
                         </div>
-                        <p className="text-xs text-muted-foreground/70">
-                          Agent can only access files within this directory.
-                        </p>
                       </div>
                     </>
                   )}
@@ -2134,6 +2244,17 @@ export default function ChatPage() {
           )}
         </div>
       </div>
+
+      {/* Voice Call Dialog */}
+      {activeAgent && (
+        <VoiceCallDialog
+          open={isVoiceCallOpen}
+          onOpenChange={setIsVoiceCallOpen}
+          agentId={activeAgent.id}
+          agentName={activeAgent.name}
+          agentAvatar={activeAgent.avatar}
+        />
+      )}
     </>
   );
 }

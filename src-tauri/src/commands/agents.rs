@@ -5,7 +5,7 @@ use diesel::prelude::*;
 use tauri::State;
 use std::sync::Arc;
 use tauri::{Runtime, WebviewWindow};
-use anyagents::agents::AgentLoop;
+use anyagents::agents::coordinator::Coordinator;
 use crate::events::TauriAgentObserver;
 
 #[tauri::command]
@@ -54,6 +54,7 @@ pub async fn create_agent(
         execution_settings: None,
         scope_type: None,
         workspace_path: None,
+        avatar: None,
     };
 
     diesel::insert_into(agents::table)
@@ -480,27 +481,43 @@ pub fn start_chat_task<R: Runtime>(
     pending_approvals: Arc<dashmap::DashMap<String, tokio::sync::oneshot::Sender<bool>>>,
     permission_manager: Arc<anyagents::permissions::PermissionManager>,
     db_pool: anyagents::database::DbPool,
-    _mode: String,
+    mode: String,
     model: Option<String>,
 ) {
     let observer = Arc::new(TauriAgentObserver { window });
-    let job_id = uuid::Uuid::new_v4().to_string();
+
+    // Check if agent is in autonomous mode
+    let is_autonomous = if let Some(ref settings_str) = agent.execution_settings {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(settings_str) {
+            json.get("mode")
+                .and_then(|m| m.as_str())
+                .map(|m| m == "autopilot" || m == "autonomous")
+                .unwrap_or(false)
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    if is_autonomous {
+        log::info!("🤖 Agent '{}' is in AUTONOMOUS mode - auto-approving all permissions", agent.name);
+    }
+
+    // Create autonomous permission manager if needed
+    let autonomous_pm = Arc::new(anyagents::permissions::AutonomousPermissionManager::new(is_autonomous));
 
     tauri::async_runtime::spawn(async move {
-        let mut loop_instance = AgentLoop::new(&agent, db_pool.clone()).await;
-        loop_instance.session_id = session_id;
-        
-        if let Some(m) = model {
-             loop_instance.model = m;
-        }
-
-        loop_instance.run(
-            message,
+        let coordinator = Coordinator::new_with_autonomous(
+            session_id,
+            agent,
             observer,
-            job_id,
+            db_pool,
+            autonomous_pm,
             pending_approvals,
-            permission_manager,
-            db_pool
-        ).await;
+            mode,
+            model,
+        );
+        coordinator.run(message).await;
     });
 }

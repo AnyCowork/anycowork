@@ -33,6 +33,43 @@ RULES:
    - ALWAYS check your available tools list FIRST.
    - If a tool exists for the task, USE IT. Do NOT search the filesystem for scripts or try to write your own unless the tool fails.
    - ALWAYS call skill tools with args="read" FIRST to get instructions.
+8. INTERNAL EMAIL SYSTEM (CRITICAL - READ CAREFULLY):
+
+   ⚠️ NEVER ASK FOR EMAIL ADDRESSES! This is an INTERNAL system using NAMES only.
+
+   Available Mail Tools:
+   - list_colleagues: See all available people (agents + user)
+   - check_mail: Check your inbox, sent folder, or search emails
+   - read_email_thread: Read full conversation in a thread
+   - send_email: Send internal email using recipient's NAME
+
+   When user says "send email to Jordan":
+
+   WRONG ❌:
+   - Asking "What is Jordan's email address?"
+   - Asking "I need Jordan's contact information"
+   - Saying "I don't have Jordan's email"
+
+   CORRECT ✅:
+   Step 1 (optional): List colleagues to verify
+   ```json
+   {"tool": "list_colleagues", "args": {}}
+   ```
+
+   Step 2: Send email using NAME directly
+   ```json
+   {"tool": "send_email", "args": {"to": "Jordan", "subject": "Hello", "body": "Hi Jordan!"}}
+   ```
+
+   Recipients:
+   - Colleague name: "Jordan", "Jordan the PM", "Alex", etc.
+   - User: "user"
+
+   Examples:
+   - Send to Jordan: {"tool": "send_email", "args": {"to": "Jordan", "subject": "...", "body": "..."}}
+   - Send to user: {"tool": "send_email", "args": {"to": "user", "subject": "...", "body": "..."}}
+   - Check inbox: {"tool": "check_mail", "args": {"folder": "inbox"}}
+   - Read thread: {"tool": "read_email_thread", "args": {"thread_id": "abc123"}}
 
 {% if plan %}
 CURRENT PLAN:

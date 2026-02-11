@@ -37,6 +37,7 @@ mod tests {
             execution_settings: None,
             scope_type: None,
             workspace_path: None,
+            avatar: None,
         };
 
         diesel::insert_into(agents::table)

@@ -148,4 +148,69 @@ impl PermissionManager {
             .map(|entry| entry.key().clone())
             .collect()
     }
+
+    /// Check if a permission is in the cache
+    pub fn is_cached(&self, key: &str) -> Option<bool> {
+        let cache = self.cache.lock().unwrap();
+        cache.get(key).copied()
+    }
+
+    /// Clear all cached permissions
+    pub fn clear_cache(&self) {
+        let mut cache = self.cache.lock().unwrap();
+        cache.clear();
+    }
+}
+
+/// Autonomous Permission Manager that can auto-approve all requests
+/// Used when agents are in autonomous/autopilot mode
+pub struct AutonomousPermissionManager {
+    base: PermissionManager,
+    autonomous: bool,
+}
+
+impl AutonomousPermissionManager {
+    pub fn new(autonomous: bool) -> Self {
+        Self {
+            base: PermissionManager::new(),
+            autonomous,
+        }
+    }
+
+    /// Request permission, auto-approving in autonomous mode
+    pub async fn request_permission(
+        &self,
+        observer: Option<&Arc<dyn crate::events::AgentObserver>>,
+        req: PermissionRequest,
+    ) -> Result<bool, String> {
+        if self.autonomous {
+            // In autonomous mode, auto-approve all requests
+            log::info!("🤖 Autonomous mode: Auto-approving permission request: {}", req.message);
+            return Ok(true);
+        }
+
+        // Otherwise, use normal permission flow
+        self.base.request_permission(observer, req).await
+    }
+
+    pub fn approve_request(&self, request_id: &str) {
+        self.base.approve_request(request_id);
+    }
+
+    pub fn reject_request(&self, request_id: &str) {
+        self.base.reject_request(request_id);
+    }
+
+    pub fn get_pending_requests(&self) -> Vec<String> {
+        self.base.get_pending_requests()
+    }
+
+    pub fn is_autonomous(&self) -> bool {
+        self.autonomous
+    }
+
+    /// Get the underlying base permission manager
+    pub fn base(&self) -> &PermissionManager {
+        &self.base
+    }
 }

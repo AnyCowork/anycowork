@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(do sed -i '/use office_test_helpers::\\\\*;/a use tauri::Manager;' \"$file\")",
+      "Bash(do sed -i '/use anycowork::commands::mail/a use anycowork::AppState;' \"$file\")",
+      "WebSearch",
+      "Bash(cargo check:*)",
+      "Bash(npm run build:*)"
+    ]
+  }
+}

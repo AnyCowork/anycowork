@@ -25,6 +25,7 @@ diesel::table! {
         execution_settings -> Nullable<Text>,
         scope_type -> Nullable<Text>,
         workspace_path -> Nullable<Text>,
+        avatar -> Nullable<Text>,
     }
 }
 
@@ -146,6 +147,40 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    mail_threads (id) {
+        id -> Text,
+        subject -> Text,
+        is_read -> Integer,
+        is_archived -> Integer,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    mail_messages (id) {
+        id -> Text,
+        thread_id -> Text,
+        sender_type -> Text,
+        sender_agent_id -> Nullable<Text>,
+        recipient_type -> Text,
+        recipient_agent_id -> Nullable<Text>,
+        content -> Text,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    settings (id) {
+        id -> Text,
+        key -> Text,
+        value -> Nullable<Text>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(messages -> sessions (session_id));
 diesel::joinable!(sessions -> agents (agent_id));
 diesel::joinable!(telegram_configs -> agents (agent_id));
@@ -154,6 +189,7 @@ diesel::joinable!(attachments -> pages (page_id));
 diesel::joinable!(agent_skill_assignments -> agents (agent_id));
 diesel::joinable!(agent_skill_assignments -> agent_skills (skill_id));
 diesel::joinable!(skill_files -> agent_skills (skill_id));
+diesel::joinable!(mail_messages -> mail_threads (thread_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     agents,
@@ -167,6 +203,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     agent_skill_assignments,
     skill_files,
     mcp_servers,
+    mail_threads,
+    mail_messages,
+    settings,
 );
 
 diesel::table! {

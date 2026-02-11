@@ -10,14 +10,23 @@ pub async fn create_session(
     state: State<'_, AppState>,
     agent_id: String,
 ) -> Result<Session, String> {
-    use anyagents::schema::sessions;
+    use anyagents::schema::{agents, sessions};
 
     let mut conn = state.db_pool.get().map_err(|e| e.to_string())?;
+
+    // Get agent name to create default title
+    let agent = agents::table
+        .filter(agents::id.eq(&agent_id))
+        .first::<anyagents::models::Agent>(&mut conn)
+        .map_err(|e| format!("Agent not found: {}", e))?;
+
+    // Create default title: "Chat with {agent_name}"
+    let default_title = format!("Chat with {}", agent.name);
 
     let new_session = NewSession {
         id: uuid::Uuid::new_v4().to_string(),
         agent_id,
-        title: None,
+        title: Some(default_title),
         created_at: chrono::Utc::now().naive_utc(),
         updated_at: chrono::Utc::now().naive_utc(),
         archived: 0,
@@ -291,6 +300,7 @@ mod tests {
             execution_settings: None,
             scope_type: None,
             workspace_path: None,
+            avatar: None,
         };
 
         diesel::insert_into(agents::table)

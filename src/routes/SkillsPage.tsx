@@ -305,30 +305,30 @@ export default function SkillsPage() {
       <ConfirmDialog />
       {/* Header */}
       <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto max-w-7xl px-8 py-6">
+        <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80">
-                <Wrench className="h-5 w-5 text-primary-foreground" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80">
+                <Wrench className="h-4 w-4 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">Skills Management</h1>
-                <p className="text-sm text-muted-foreground">
+                <h1 className="text-xl font-bold">Skills Management</h1>
+                <p className="text-xs text-muted-foreground">
                   Browse and configure global skills available to all agents
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               {dockerAvailable && (
-                <Badge variant="outline" className="gap-1.5 px-3 py-1.5 text-sm">
-                  <Shield className="h-4 w-4" />
+                <Badge variant="outline" className="gap-1.5">
+                  <Shield className="h-3.5 w-3.5" />
                   Docker Available
                 </Badge>
               )}
               <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
                 <DialogTrigger asChild>
-                  <Button size="lg" className="gap-2">
-                    <Plus className="h-4 w-4" />
+                  <Button size="sm" className="gap-1.5">
+                    <Plus className="h-3.5 w-3.5" />
                     Import Skill
                   </Button>
                 </DialogTrigger>
@@ -367,7 +367,7 @@ export default function SkillsPage() {
       </div>
 
       {/* Main Content */}
-      <div className="mx-auto max-w-7xl p-8">
+      <div className="mx-auto max-w-7xl p-6">
         <Tabs defaultValue="installed" className="space-y-6">
           <div className="flex items-center justify-between gap-4">
             <TabsList>
@@ -441,16 +441,16 @@ export default function SkillsPage() {
             ) : categories.length === 0 ? (
               <Card className="border-dashed">
                 <CardContent className="flex flex-col items-center justify-center py-16">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted mb-3">
                     <Wrench className="h-8 w-8 text-muted-foreground" />
                   </div>
                   <h3 className="text-lg font-semibold">No skills installed</h3>
                   <p className="mt-2 text-sm text-muted-foreground text-center max-w-md">
                     Skills extend your agents with specialized capabilities. Browse the marketplace or import a custom skill to get started.
                   </p>
-                  <div className="flex gap-3 mt-6">
-                    <Button variant="outline" onClick={() => setShowImportDialog(true)} className="gap-2">
-                      <Plus className="h-4 w-4" />
+                  <div className="flex gap-3 mt-4">
+                    <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)} className="gap-1.5">
+                      <Plus className="h-3.5 w-3.5" />
                       Import Skill
                     </Button>
                   </div>
@@ -459,7 +459,7 @@ export default function SkillsPage() {
             ) : (
               categories.map((category) => (
                 <Card key={category}>
-                  <CardHeader>
+                  <CardHeader className="pb-3">
                     <div className="flex items-center gap-3">
                       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
                         <Wrench className="h-4 w-4" />
@@ -586,7 +586,7 @@ export default function SkillsPage() {
             ) : filteredMarketplace.length === 0 ? (
               <Card className="border-dashed">
                 <CardContent className="flex flex-col items-center justify-center py-16">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted mb-3">
                     <Download className="h-8 w-8 text-muted-foreground" />
                   </div>
                   <h3 className="text-lg font-semibold">No skills found</h3>
@@ -599,7 +599,7 @@ export default function SkillsPage() {
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {filteredMarketplace.map((skill: MarketplaceSkill) => (
                   <Card key={skill.id} className="relative hover:border-primary/50 transition-all hover:shadow-md">
-                    <CardHeader>
+                    <CardHeader className="pb-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <CardTitle className="text-base line-clamp-1">{skill.name}</CardTitle>

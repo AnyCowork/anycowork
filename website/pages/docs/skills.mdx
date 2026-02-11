@@ -50,26 +50,32 @@ You can configure an Agent to **force** Sandbox mode via its Execution Settings.
 
 ## Developing Skills
 
-Skills are stored in the `skills/` directory (either bundled with the app or in your user data folder). A typical skill structure looks like this:
+Skills are stored in the `skills/` directory (either bundled with the app or in your user data folder). Each skill is defined by a `SKILL.md` file with YAML frontmatter:
 
 ```
 my-skill/
-├── skill.yaml       # Definition
-├── README.md        # AI Context & Usage Guide
+├── SKILL.md              # Definition (frontmatter + instructions)
 └── src/
-    ├── main.py      # Implementation
-    └── requirements.txt
+    ├── main.py           # Implementation
+    └── requirements.txt  # Dependencies
 ```
 
-### skill.yaml Example
+### SKILL.md Format
 
-```yaml
-name: "pdf-generator"
-version: "1.0.0"
-description: "Converts Markdown to PDF using python-markdown and weasyprint."
-execution_mode: "sandbox"
-requires_sandbox: true
-sandbox_config:
-  image: "python:3.11-slim"
-  memory_limit: "512m"
+Skills use a single Markdown file with `---` YAML frontmatter for metadata:
+
+```markdown
+---
+name: pdf-generator
+description: Converts Markdown to PDF using python-markdown and weasyprint.
+license: Apache 2.0
+---
+
+# PDF Generator Skill
+
+Instructions for the AI on how and when to use this skill...
 ```
+
+The body of the Markdown file serves as both documentation and AI context - the agent reads it to understand how to invoke the skill.
+
+For a complete guide on adding skills, see [Extending AnyCowork](/docs/extending).

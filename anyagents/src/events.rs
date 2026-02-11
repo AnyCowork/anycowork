@@ -55,6 +55,13 @@ pub enum AgentEvent {
     PlanUpdate {
         plan: crate::models::PlanUpdate,
     },
+
+    // Mail
+    NewMail {
+        thread_id: String,
+        subject: String,
+        from_name: String,
+    },
 }
 
 #[derive(Serialize, Clone, Debug)]

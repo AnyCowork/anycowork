@@ -1,0 +1,282 @@
+---
+title: Extending AnyCowork
+description: Guide for adding skills, connectors, tools, and MCP integrations to AnyCowork
+---
+
+# Extending AnyCowork
+
+AnyCowork is designed to be extensible. There are four main ways to add new capabilities:
+
+1. **Skills** - High-level capability bundles (scripts, templates, automation)
+2. **Connectors** - Bridge external platforms (Telegram, Slack, Discord) to agents
+3. **Tools** - Low-level Rust primitives (filesystem, search, bash)
+4. **MCP Servers** - Connect external tools and data via the Model Context Protocol
+
+---
+
+## Adding Skills
+
+Skills are the easiest way to extend AnyCowork. A skill is a Markdown file with YAML frontmatter that teaches an agent how to perform a specific task.
+
+### Skill File Format (SKILL.md)
+
+Every skill is defined by a single `SKILL.md` file:
+
+```markdown
+---
+name: my-skill
+description: A short description of what this skill does.
+license: MIT
+---
+
+# My Skill
+
+Instructions for the AI agent on how to use this skill.
+
+## When to Use
+
+Describe the triggers and scenarios.
+
+## How to Execute
+
+Step-by-step instructions, code templates, etc.
+```
+
+### Frontmatter Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Unique identifier (lowercase, hyphens) |
+| `description` | Yes | One-line summary shown in the UI |
+| `license` | No | License for the skill (e.g., MIT, Apache 2.0) |
+
+### Bundling Files with a Skill
+
+Skills can include supporting files (scripts, templates, configs) in the same directory:
+
+```
+my-skill/
+├── SKILL.md              # Skill definition
+├── src/
+│   ├── main.py           # Python script
+│   └── requirements.txt  # Dependencies
+└── templates/
+    └── report.html       # Template file
+```
+
+All files in the skill directory are stored in the database and made available to the agent at execution time.
+
+### Sandbox Configuration
+
+Skills that execute code should declare sandbox requirements in the SKILL.md body or rely on the agent's execution mode setting:
+
+- **Sandbox**: Runs in an isolated Docker container (recommended for untrusted code)
+- **Flexible**: Uses Docker if available, falls back to host
+- **Direct**: Runs directly on the host machine
+
+### Publishing Skills
+
+Skills can be shared by:
+
+1. Placing the skill directory in `src-tauri/skills/`
+2. Importing via the Settings UI
+3. *(Coming soon)* Publishing to the AnyCowork Skill Marketplace
+
+---
+
+## Adding Connectors
+
+Connectors bridge external messaging platforms to AnyCowork agents. The Telegram connector serves as the reference implementation.
+
+### Architecture Pattern
+
+A connector follows this pattern:
+
+```
+External Platform (e.g., Telegram)
+    ↓ incoming message
+Connector Manager (manages lifecycle)
+    ↓ routes to agent
+Agent System (Coordinator → AgentLoop)
+    ↓ response
+Connector Manager
+    ↓ sends reply
+External Platform
+```
+
+### Key Components
+
+1. **Manager** (`TelegramBotManager`) - Handles starting/stopping bot instances, stores running state
+2. **Message Handler** - Receives messages from the platform, forwards to the AI agent
+3. **Database Config** - Stores connection credentials (bot tokens, API keys)
+4. **Tauri Commands** - IPC endpoints for the frontend to manage the connector
+
+### Building a Custom Connector
+
+To add a new platform connector (e.g., Discord, Slack):
+
+#### 1. Add the dependency
+
+In `src-tauri/Cargo.toml`, add the platform's Rust SDK:
+
+```toml
+[dependencies]
+serenity = "0.12"  # Example: Discord
+```
+
+#### 2. Create the connector module
+
+Create `src-tauri/src/discord.rs` (or your platform name):
+
+```rust
+use anyagents::database::DbPool;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::{mpsc, RwLock};
+
+pub struct DiscordBotManager {
+    pub db_pool: DbPool,
+    pub running_bots: Arc<RwLock<HashMap<String, mpsc::Sender<()>>>>,
+}
+
+impl DiscordBotManager {
+    pub fn new(db_pool: DbPool) -> Self {
+        Self {
+            db_pool,
+            running_bots: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    pub async fn start_bot(&self, config_id: &str) -> Result<(), String> {
+        // 1. Load config from database
+        // 2. Initialize platform client
+        // 3. Set up message handler that forwards to agent
+        // 4. Store shutdown handle in running_bots
+        todo!()
+    }
+
+    pub async fn stop_bot(&self, config_id: &str) -> Result<(), String> {
+        // 1. Send shutdown signal
+        // 2. Remove from running_bots
+        todo!()
+    }
+}
+```
+
+#### 3. Add database migration
+
+```bash
+cd src-tauri
+diesel migration generate create_discord_configs
+```
+
+#### 4. Register Tauri commands
+
+Add start/stop/configure commands in `src-tauri/src/lib.rs` and expose them to the frontend.
+
+#### 5. Add frontend UI
+
+Create a configuration panel in the Settings page following the existing Telegram pattern.
+
+---
+
+## Adding Tools
+
+Tools are low-level Rust primitives that agents can invoke during execution. They provide direct capabilities like file operations, search, and command execution.
+
+### The Tool Trait
+
+All tools implement the `Tool` trait defined in `anyagents/src/tools/mod.rs`:
+
+```rust
+#[async_trait]
+pub trait Tool: Send + Sync {
+    fn name(&self) -> String;
+    fn description(&self) -> String;
+    fn parameters_schema(&self) -> serde_json::Value;
+    async fn validate_args(&self, args: &serde_json::Value) -> Result<(), String>;
+    async fn execute(
+        &self,
+        args: serde_json::Value,
+        ctx: &ToolContext
+    ) -> Result<serde_json::Value, String>;
+    fn verify_result(&self, result: &serde_json::Value) -> bool;
+}
+```
+
+### Implementing a New Tool
+
+```rust
+use crate::tools::{Tool, ToolContext};
+use async_trait::async_trait;
+use serde_json::{json, Value};
+
+pub struct MyCustomTool;
+
+#[async_trait]
+impl Tool for MyCustomTool {
+    fn name(&self) -> String {
+        "my_custom_tool".to_string()
+    }
+
+    fn description(&self) -> String {
+        "Performs a specific operation".to_string()
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "input": {
+                    "type": "string",
+                    "description": "The input to process"
+                }
+            },
+            "required": ["input"]
+        })
+    }
+
+    async fn validate_args(&self, args: &Value) -> Result<(), String> {
+        args.get("input")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing 'input' parameter")?;
+        Ok(())
+    }
+
+    async fn execute(&self, args: Value, _ctx: &ToolContext) -> Result<Value, String> {
+        let input = args["input"].as_str().unwrap();
+        // Your implementation here
+        Ok(json!({ "result": format!("Processed: {}", input) }))
+    }
+
+    fn verify_result(&self, result: &Value) -> bool {
+        result.get("result").is_some()
+    }
+}
+```
+
+### Registering a Tool
+
+Add the tool to the `AgentLoop::new()` method in `anyagents/src/agents/mod.rs`:
+
+```rust
+let mut tools: Vec<Box<dyn Tool>> = vec![
+    Box::new(FilesystemTool::new(workspace_path.clone())),
+    Box::new(SearchTool),
+    Box::new(BashTool::new(workspace_path.clone(), execution_mode.clone())),
+    Box::new(MyCustomTool),  // Add your tool here
+];
+```
+
+---
+
+## MCP Integration
+
+AnyCowork supports the [Model Context Protocol](https://modelcontextprotocol.io) for connecting to external tool servers. See the [MCP documentation](/docs/mcp) for details on connecting and building MCP servers.
+
+MCP is the recommended approach when you want to:
+
+- Reuse existing community-built tool servers
+- Connect to databases, APIs, or SaaS platforms
+- Share tool implementations across multiple AI applications
+- Keep tool implementations language-agnostic (not limited to Rust)

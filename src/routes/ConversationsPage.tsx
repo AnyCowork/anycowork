@@ -69,15 +69,15 @@ export default function ConversationsPage() {
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
       {/* Header */}
       <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto max-w-7xl px-8 py-6">
+        <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80">
-                <FolderOpen className="h-5 w-5 text-primary-foreground" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80">
+                <FolderOpen className="h-4 w-4 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">Conversations</h1>
-                <p className="text-sm text-muted-foreground">
+                <h1 className="text-xl font-bold">Conversations</h1>
+                <p className="text-xs text-muted-foreground">
                   Browse and manage your chat history
                 </p>
               </div>
@@ -85,7 +85,7 @@ export default function ConversationsPage() {
           </div>
 
           {/* Search and Filters */}
-          <div className="mt-6 flex gap-4">
+          <div className="mt-4 flex gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -100,21 +100,21 @@ export default function ConversationsPage() {
       </div>
 
       {/* Main Content */}
-      <div className="mx-auto max-w-7xl p-8">
+      <div className="mx-auto max-w-7xl p-6">
         <div className="space-y-4">
           {conversations.map((conversation) => (
             <Card key={conversation.id} className="group relative overflow-hidden transition-all hover:shadow-md">
-              <CardHeader>
+              <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                        <Bot className="h-5 w-5" />
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+                        <Bot className="h-4 w-4" />
                       </div>
                       <div>
                         <CardTitle className="text-lg">{conversation.agentName}</CardTitle>
                         <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3" />
+                          <Clock className="h-3.5 w-3.5" />
                           {formatTimestamp(conversation.timestamp)}
                           <span>•</span>
                           <span>{conversation.messageCount} messages</span>

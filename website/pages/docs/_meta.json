@@ -19,6 +19,12 @@
   },
   "architecture": "System Architecture",
   "vision": "Vision & Roadmap",
+  "Extensibility": {
+    "type": "separator",
+    "title": "Extensibility"
+  },
+  "extending": "Extending AnyCowork",
+  "connectors": "Connectors & Integrations",
   "Development": {
     "type": "separator",
     "title": "Development"

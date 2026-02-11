@@ -14,106 +14,17 @@ pub enum QueryType {
 pub struct Router {
     pub model: String,
     pub provider: String,
+    pub api_key: Option<String>,
 }
 
 impl Router {
-    pub fn new(model: String, provider: String) -> Self {
-        Self { model, provider }
+    pub fn new(model: String, provider: String, api_key: Option<String>) -> Self {
+        Self { model, provider, api_key }
     }
 
     /// Classify a query as simple or complex
     pub async fn classify(&self, query: &str) -> QueryType {
-        // Fast heuristics first - avoid LLM call for obvious cases
-        let query_lower = query.to_lowercase();
-
-        // Simple patterns - greetings, basic questions
-        let simple_patterns = [
-            "hello",
-            "hi",
-            "hey",
-            "good morning",
-            "good afternoon",
-            "good evening",
-            "how are you",
-            "what's up",
-            "thanks",
-            "thank you",
-            "bye",
-            "goodbye",
-            "what is",
-            "what are",
-            "who is",
-            "who are",
-            "why is",
-            "why are",
-            "explain",
-            "tell me about",
-            "describe",
-            "define",
-            "can you help",
-            "help me understand",
-        ];
-
-        // Complex patterns - actions, file operations, code tasks
-        let complex_patterns = [
-            "create",
-            "write",
-            "make",
-            "build",
-            "generate",
-            "implement",
-            "edit",
-            "modify",
-            "change",
-            "update",
-            "fix",
-            "refactor",
-            "delete",
-            "remove",
-            "run",
-            "execute",
-            "install",
-            "file",
-            "folder",
-            "directory",
-            "code",
-            "script",
-            "search for",
-            "find",
-            "list files",
-            "read file",
-            "commit",
-            "push",
-            "pull",
-            "deploy",
-            "test",
-            "debug",
-            "compile",
-            "lint",
-        ];
-
-        // Check for complex patterns first (they take priority)
-        for pattern in complex_patterns.iter() {
-            if query_lower.contains(pattern) {
-                info!(
-                    "Router: Query classified as COMPLEX (pattern: {})",
-                    pattern
-                );
-                return QueryType::Complex;
-            }
-        }
-
-        // Check for simple patterns
-        for pattern in simple_patterns.iter() {
-            if query_lower.starts_with(pattern) || query_lower.contains(pattern) {
-                info!(
-                    "Router: Query classified as SIMPLE (pattern: {})",
-                    pattern
-                );
-                return QueryType::Simple;
-            }
-        }
-
+        // ... existing code ...
         // For ambiguous cases, use LLM classification
         self.classify_with_llm(query).await
     }
@@ -139,7 +50,11 @@ Respond with ONLY one word: "SIMPLE" or "COMPLEX""#;
 
         // Use a fast/cheap model for classification
         let fast_model = LlmClient::fast_model(&self.provider);
-        let client = LlmClient::new(&self.provider, fast_model).with_preamble(preamble);
+        let mut client = LlmClient::new(&self.provider, fast_model).with_preamble(preamble);
+        
+        if let Some(key) = &self.api_key {
+            client = client.with_api_key(key);
+        }
 
         match client.prompt(query).await {
             Ok(response) => {

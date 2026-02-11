@@ -72,18 +72,25 @@ export default function ConnectionsPage() {
     };
 
     return (
-        <div className="container mx-auto p-6 space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Connections</h1>
-                    <p className="text-muted-foreground">
-                        Manage distributed AnyCowork nodes and federation.
+        <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
+          <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="mx-auto max-w-7xl px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80">
+                    <Globe className="h-4 w-4 text-primary-foreground" />
+                  </div>
+                  <div>
+                    <h1 className="text-xl font-bold">Connections</h1>
+                    <p className="text-xs text-muted-foreground">
+                      Manage distributed AnyCowork nodes and federation
                     </p>
+                  </div>
                 </div>
                 <Dialog open={isOpen} onOpenChange={setIsOpen}>
                     <DialogTrigger asChild>
-                        <Button className="gap-2">
-                            <Plus className="h-4 w-4" /> Add Connection
+                        <Button size="sm" className="gap-1.5">
+                            <Plus className="h-3.5 w-3.5" /> Add Connection
                         </Button>
                     </DialogTrigger>
                     <DialogContent>
@@ -147,8 +154,11 @@ export default function ConnectionsPage() {
                         </form>
                     </DialogContent>
                 </Dialog>
+              </div>
             </div>
+          </div>
 
+          <div className="mx-auto max-w-7xl p-6">
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {nodes.map((node) => (
                     <Card key={node.node_id}>
@@ -163,8 +173,8 @@ export default function ConnectionsPage() {
                             )}
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold flex items-center gap-2">
-                                <Globe className="h-6 w-6 text-muted-foreground" />
+                            <div className="text-lg font-bold flex items-center gap-2">
+                                <Globe className="h-4 w-4 text-muted-foreground" />
                                 {node.host}
                             </div>
                             <div className="text-xs text-muted-foreground mt-1">
@@ -182,12 +192,13 @@ export default function ConnectionsPage() {
                 ))}
                 {nodes.length === 0 && !isLoading && (
                     <div className="col-span-full text-center p-12 text-muted-foreground border rounded-lg border-dashed">
-                        <Globe className="mx-auto h-12 w-12 opacity-50 mb-4" />
+                        <Globe className="mx-auto h-8 w-8 opacity-50 mb-3" />
                         <h3 className="text-lg font-medium">No connections yet</h3>
                         <p>Add a connection to start federating with other nodes.</p>
                     </div>
                 )}
             </div>
+          </div>
         </div>
     );
 }

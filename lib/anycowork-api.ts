@@ -160,8 +160,13 @@ export interface PlanUpdate {
 
 export interface Session {
   id: string;
+  agent_id: string;
+  title?: string;
   agent_config: any;
   created_at: number;
+  updated_at?: number;
+  archived?: number;
+  pinned?: number;
 }
 
 // Telegram Config types (for new Telegram integration)
@@ -253,6 +258,33 @@ export interface McpTemplate {
   args?: string[];
   env?: Record<string, string>;
   url?: string;
+}
+
+// Mail types
+export interface MailThread {
+  id: string;
+  subject: string;
+  is_read: number;
+  is_archived: number;
+  created_at: string;
+  updated_at: string;
+  last_message_preview?: string;
+  last_sender_name?: string;
+  last_sender_avatar?: string;
+  message_count?: number;
+}
+
+export interface MailMessage {
+  id: string;
+  thread_id: string;
+  sender_type: 'user' | 'agent';
+  sender_agent_id?: string;
+  sender_name?: string;
+  sender_avatar?: string;
+  recipient_type: 'user' | 'agent';
+  recipient_agent_id?: string;
+  content: string;
+  created_at: string;
 }
 
 // API Methods
@@ -362,21 +394,12 @@ export const anycoworkApi = {
   },
 
   // Configuration
-  getAIConfig: async () => ({
-    max_tokens: 4000,
-    temperature: 0.7,
-    top_p: 1.0,
-    frequency_penalty: 0.0,
-    presence_penalty: 0.0,
-    provider: 'gemini',
-    anthropic_api_key: '',
-    anthropic_model: 'claude-3-opus',
-    openai_api_key: '',
-    openai_model: 'gpt-4',
-    gemini_api_key: '',
-    gemini_model: 'gemini-3-flash-preview'
-  }),
-  updateAIConfig: async (config: any) => ({ success: true }),
+  getAIConfig: async () => {
+    return invoke<AIConfig>('get_ai_config');
+  },
+  updateAIConfig: async (config: any) => {
+    return invoke('update_ai_config', { config });
+  },
   // Messaging (Bridge for UI single-config view)
   getMessagingConfig: async () => {
     const configs = await invoke<any[]>('get_telegram_configs');
@@ -642,17 +665,38 @@ export const anycoworkApi = {
   addWhitelistedTool: async (tool: string) => ({ status: 'ok', tool }),
   removeWhitelistedTool: async (tool: string) => ({ status: 'ok', tool }),
 
-  getAvailableModels: async () => ({
-    providers: {
-      anthropic: { display_name: 'Anthropic', available: true, default: 'claude-3-opus', models: [] },
-      openai: { display_name: 'OpenAI', available: true, default: 'gpt-4', models: [] },
-      gemini: { display_name: 'Google', available: true, default: 'gemini-3-flash-preview', models: [] }
-    },
-    defaults: {}
-  }),
+  getAvailableModels: async () => {
+    return invoke('get_available_models');
+  },
 
   // Window commands
   toggleDevtools: async () => invoke<void>('toggle_devtools'),
   isDevMode: async () => invoke<boolean>('is_dev_mode'),
   getCurrentWorkingDirectory: async () => invoke<string>('get_current_working_directory'),
+
+  // Mail
+  getMailThreads: async (accountId?: string, folder?: string, isArchived?: boolean) =>
+    invoke<MailThread[]>('get_mail_threads', { accountId: accountId ?? null, folder: folder ?? null, isArchived: isArchived ?? null }),
+  getMailThreadMessages: async (threadId: string) =>
+    invoke<MailMessage[]>('get_mail_thread_messages', { threadId }),
+  sendMail: async (fromAgentId: string | null, toAgentId: string | null, subject: string, body: string) =>
+    invoke<MailThread>('send_mail', { fromAgentId, toAgentId, subject, body }),
+  replyToMail: async (threadId: string, fromAgentId: string | null, content: string) =>
+    invoke<MailMessage>('reply_to_mail', { threadId, fromAgentId, content }),
+  markThreadRead: async (threadId: string) =>
+    invoke<void>('mark_thread_read', { threadId }),
+  archiveThread: async (threadId: string) =>
+    invoke<void>('archive_thread', { threadId }),
+  getUnreadMailCount: async (accountId?: string) =>
+    invoke<number>('get_unread_mail_count', { accountId: accountId ?? null }),
+
+  // Voice Calls
+  startVoiceCall: async (agentId: string, apiKey: string) =>
+    invoke<string>('start_voice_call', { agentId, apiKey }),
+  stopVoiceCall: async (sessionId: string) =>
+    invoke<void>('stop_voice_call', { sessionId }),
+  sendVoiceAudio: async (sessionId: string, audioData: number[]) =>
+    invoke<void>('send_voice_audio', { sessionId, audioData }),
+  isVoiceCallActive: async (sessionId: string) =>
+    invoke<boolean>('is_voice_call_active', { sessionId }),
 };

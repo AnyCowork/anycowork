@@ -25,6 +25,7 @@ pub struct LlmClient {
     provider: String,
     model: String,
     preamble: Option<String>,
+    api_key: Option<String>,
 }
 
 impl LlmClient {
@@ -34,6 +35,7 @@ impl LlmClient {
             provider: provider.to_string(),
             model: model.to_string(),
             preamble: None,
+            api_key: None,
         }
     }
 
@@ -43,8 +45,20 @@ impl LlmClient {
         self
     }
 
+    /// Set the API key explicitly
+    pub fn with_api_key(mut self, api_key: &str) -> Self {
+        if !api_key.is_empty() {
+            self.api_key = Some(api_key.to_string());
+        }
+        self
+    }
+
     /// Check if the required API key is set
     pub fn check_api_key(&self) -> Result<(), String> {
+        if self.api_key.is_some() {
+            return Ok(());
+        }
+
         let key_name = match self.provider.as_str() {
             "openai" => "OPENAI_API_KEY",
             "gemini" => "GEMINI_API_KEY",
@@ -53,7 +67,7 @@ impl LlmClient {
         };
 
         if std::env::var(key_name).unwrap_or_default().is_empty() {
-            return Err(format!("Error: {} not set", key_name));
+            return Err(format!("Error: {} not set (env or settings)", key_name));
         }
         Ok(())
     }
@@ -65,17 +79,29 @@ impl LlmClient {
 
         match self.provider.as_str() {
             "openai" => {
-                let client = openai::Client::from_env();
+                let client = if let Some(key) = &self.api_key {
+                    openai::Client::new(key)
+                } else {
+                    Ok(openai::Client::from_env())
+                }.map_err(|e| e.to_string())?;
                 let agent = client.agent(&self.model).preamble(&preamble).build();
                 agent.prompt(message).await.map_err(|e| e.to_string())
             }
             "gemini" => {
-                let client = gemini::Client::from_env();
+                let client = if let Some(key) = &self.api_key {
+                    gemini::Client::new(key)
+                } else {
+                    Ok(gemini::Client::from_env())
+                }.map_err(|e| e.to_string())?;
                 let agent = client.agent(&self.model).preamble(&preamble).build();
                 agent.prompt(message).await.map_err(|e| e.to_string())
             }
             "anthropic" => {
-                let client = anthropic::Client::from_env();
+                let client = if let Some(key) = &self.api_key {
+                    anthropic::Client::new(key)
+                } else {
+                    Ok(anthropic::Client::from_env())
+                }.map_err(|e| e.to_string())?;
                 let agent = client.agent(&self.model).preamble(&preamble).build();
                 agent.prompt(message).await.map_err(|e| e.to_string())
             }
@@ -90,7 +116,11 @@ impl LlmClient {
 
         match self.provider.as_str() {
             "openai" => {
-                let client = openai::Client::from_env();
+                let client = if let Some(key) = &self.api_key {
+                    openai::Client::new(key)
+                } else {
+                    Ok(openai::Client::from_env())
+                }.map_err(|e| e.to_string())?;
                 let agent = client.agent(&self.model).preamble(&preamble).build();
                 agent
                     .chat(message, history)
@@ -99,7 +129,11 @@ impl LlmClient {
                     .map_err(|e| e.to_string())
             }
             "gemini" => {
-                let client = gemini::Client::from_env();
+                let client = if let Some(key) = &self.api_key {
+                    gemini::Client::new(key)
+                } else {
+                    Ok(gemini::Client::from_env())
+                }.map_err(|e| e.to_string())?;
                 let agent = client.agent(&self.model).preamble(&preamble).build();
                 agent
                     .chat(message, history)
@@ -108,7 +142,11 @@ impl LlmClient {
                     .map_err(|e| e.to_string())
             }
             "anthropic" => {
-                let client = anthropic::Client::from_env();
+                let client = if let Some(key) = &self.api_key {
+                    anthropic::Client::new(key)
+                } else {
+                    Ok(anthropic::Client::from_env())
+                }.map_err(|e| e.to_string())?;
                 let agent = client.agent(&self.model).preamble(&preamble).build();
                 agent
                     .chat(message, history)
@@ -131,7 +169,11 @@ impl LlmClient {
 
         match self.provider.as_str() {
             "openai" => {
-                let client = openai::Client::from_env();
+                let client = if let Some(key) = &self.api_key {
+                    openai::Client::new(key)
+                } else {
+                    Ok(openai::Client::from_env())
+                }.map_err(|e| e.to_string())?;
                 let agent = client.agent(&self.model).preamble(&preamble).build();
                 let mut stream = agent.stream_prompt(message).await;
 
@@ -154,7 +196,11 @@ impl LlmClient {
                 }
             }
             "gemini" => {
-                let client = gemini::Client::from_env();
+                let client = if let Some(key) = &self.api_key {
+                    gemini::Client::new(key)
+                } else {
+                    Ok(gemini::Client::from_env())
+                }.map_err(|e| e.to_string())?;
                 let agent = client.agent(&self.model).preamble(&preamble).build();
                 let mut stream = agent.stream_prompt(message).await;
 
@@ -177,7 +223,11 @@ impl LlmClient {
                 }
             }
             "anthropic" => {
-                let client = anthropic::Client::from_env();
+                let client = if let Some(key) = &self.api_key {
+                    anthropic::Client::new(key)
+                } else {
+                    Ok(anthropic::Client::from_env())
+                }.map_err(|e| e.to_string())?;
                 let agent = client.agent(&self.model).preamble(&preamble).build();
                 let mut stream = agent.stream_prompt(message).await;
 
@@ -221,7 +271,11 @@ impl LlmClient {
 
         match self.provider.as_str() {
             "openai" => {
-                let client = openai::Client::from_env();
+                let client = if let Some(key) = &self.api_key {
+                    openai::Client::new(key)
+                } else {
+                    Ok(openai::Client::from_env())
+                }.map_err(|e| e.to_string())?;
                 let agent = client.agent(&self.model).preamble(&preamble).build();
                 let mut stream = agent.stream_chat(message, history).await;
 
@@ -244,7 +298,11 @@ impl LlmClient {
                 }
             }
             "gemini" => {
-                let client = gemini::Client::from_env();
+                let client = if let Some(key) = &self.api_key {
+                    gemini::Client::new(key)
+                } else {
+                    Ok(gemini::Client::from_env())
+                }.map_err(|e| e.to_string())?;
                 let agent = client.agent(&self.model).preamble(&preamble).build();
                 let mut stream = agent.stream_chat(message, history).await;
 
@@ -267,7 +325,11 @@ impl LlmClient {
                 }
             }
             "anthropic" => {
-                let client = anthropic::Client::from_env();
+                let client = if let Some(key) = &self.api_key {
+                    anthropic::Client::new(key)
+                } else {
+                    Ok(anthropic::Client::from_env())
+                }.map_err(|e| e.to_string())?;
                 let agent = client.agent(&self.model).preamble(&preamble).build();
                 let mut stream = agent.stream_chat(message, history).await;
 

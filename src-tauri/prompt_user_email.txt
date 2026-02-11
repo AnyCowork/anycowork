@@ -1,0 +1,7 @@
+Please provide the following information to compose the email:
+
+Recipient's Email Address:
+
+Subject of the Email:
+
+Body of the Email:

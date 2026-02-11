@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Bot, Plus, Trash2, Edit, Brain, Sparkles, MessageSquare, Server, Wrench, Key, Database, Shield, ShieldCheck, ShieldAlert, CheckCircle2, AlertCircle, Info, Loader2, Box
+  Bot, Plus, Trash2, Edit, Brain, Sparkles, MessageSquare, Server, Wrench, Key, Database, Shield, ShieldCheck, ShieldAlert, CheckCircle2, AlertCircle, Info, Loader2, Box, Users
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -59,8 +59,8 @@ export default function AgentsPage() {
   };
 
   const handleDeleteAgent = async (agentId: string) => {
-    const confirmed = await confirm("Are you sure you want to delete this agent?", {
-      title: "Delete Agent",
+    const confirmed = await confirm("Are you sure you want to delete this character?", {
+      title: "Delete Character",
       variant: "destructive",
     });
     if (confirmed) {
@@ -82,31 +82,31 @@ export default function AgentsPage() {
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
         {/* Header */}
         <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="mx-auto max-w-7xl px-8 py-6">
+          <div className="mx-auto max-w-7xl px-6 py-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80">
-                  <Bot className="h-5 w-5 text-primary-foreground" />
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80">
+                  <Users className="h-4 w-4 text-primary-foreground" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold">Agents Management</h1>
-                  <p className="text-sm text-muted-foreground">
-                    Create and configure AI agents with unique characteristics
+                  <h1 className="text-xl font-bold">Characters</h1>
+                  <p className="text-xs text-muted-foreground">
+                    Create and configure characters with unique characteristics
                   </p>
                 </div>
               </div>
               <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button size="lg" className="gap-2" onClick={handleCreateAgent}>
-                    <Plus className="h-4 w-4" />
-                    Create Agent
+                  <Button size="sm" className="gap-1.5" onClick={handleCreateAgent}>
+                    <Plus className="h-3.5 w-3.5" />
+                    Create Character
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Create New Agent</DialogTitle>
+                    <DialogTitle>Create New Character</DialogTitle>
                     <DialogDescription>
-                      Configure your agent with specific characteristics, skills, and connections
+                      Configure your character with specific characteristics, skills, and connections
                     </DialogDescription>
                   </DialogHeader>
                   <AgentForm onClose={() => setIsCreateDialogOpen(false)} />
@@ -117,20 +117,20 @@ export default function AgentsPage() {
         </div>
 
         {/* Main Content */}
-        <div className="mx-auto max-w-7xl p-8">
+        <div className="mx-auto max-w-7xl p-6">
           {agents.length === 0 ? (
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-12">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                  <Bot className="h-8 w-8 text-muted-foreground" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-2xl">
+                  👥
                 </div>
-                <h3 className="mt-4 text-lg font-semibold">No agents yet</h3>
+                <h3 className="mt-4 text-lg font-semibold">No characters yet</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Create your first AI agent to get started
+                  Create your first character to get started
                 </p>
-                <Button onClick={handleCreateAgent} className="mt-4 gap-2">
-                  <Plus className="h-4 w-4" />
-                  Create Agent
+                <Button size="sm" onClick={handleCreateAgent} className="mt-4 gap-1.5">
+                  <Plus className="h-3.5 w-3.5" />
+                  Create Character
                 </Button>
               </CardContent>
             </Card>
@@ -141,18 +141,18 @@ export default function AgentsPage() {
                   key={agent.id}
                   className="group relative overflow-hidden transition-all hover:shadow-lg hover:border-primary/50"
                 >
-                  <CardHeader className="p-4 pb-2">
+                  <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80">
-                          <Bot className="h-5 w-5 text-primary-foreground" />
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 text-lg">
+                          {agent.avatar || <Bot className="h-4 w-4 text-primary" />}
                         </div>
                         <div>
                           <CardTitle className="text-base font-semibold">{agent.name}</CardTitle>
                           <Badge
                             variant="outline"
                             className={cn(
-                              "mt-1 text-[10px] px-1.5 py-0 h-5",
+                              "mt-1 text-xs",
                               agent.status === "active" && "border-green-500 text-green-500",
                               agent.status === "inactive" && "border-slate-500 text-slate-500",
                               agent.status === "error" && "border-red-500 text-red-500"
@@ -166,7 +166,7 @@ export default function AgentsPage() {
                     <CardDescription className="mt-1 line-clamp-2 text-xs">{agent.description}</CardDescription>
                   </CardHeader>
 
-                  <CardContent className="p-4 pt-2 space-y-3">
+                  <CardContent className="pt-0 space-y-3">
                     {/* AI Provider */}
                     <div className="flex items-center gap-2 text-xs">
                       <Brain className="h-3.5 w-3.5 text-muted-foreground" />
@@ -183,15 +183,15 @@ export default function AgentsPage() {
                       <div className="flex flex-wrap gap-1">
                         {(agent.characteristics?.expertise || []).length > 0 ? (
                           (agent.characteristics?.expertise || []).slice(0, 3).map((exp) => (
-                            <Badge key={exp} variant="secondary" className="text-[10px] px-1.5 py-0 h-5">
+                            <Badge key={exp} variant="secondary" className="text-xs">
                               {exp}
                             </Badge>
                           ))
                         ) : (
-                          <span className="text-[10px] text-muted-foreground italic">None defined</span>
+                          <span className="text-xs text-muted-foreground italic">None defined</span>
                         )}
                         {(agent.characteristics?.expertise || []).length > 3 && (
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">+{(agent.characteristics?.expertise || []).length - 3}</Badge>
+                          <Badge variant="outline" className="text-xs">+{(agent.characteristics?.expertise || []).length - 3}</Badge>
                         )}
                       </div>
                     </div>
@@ -216,7 +216,7 @@ export default function AgentsPage() {
                         className="flex-1 gap-2 h-8 text-xs"
                         onClick={() => handleEditAgent(agent)}
                       >
-                        <Edit className="h-3 w-3" />
+                        <Edit className="h-3.5 w-3.5" />
                         Edit
                       </Button>
                       <Button
@@ -225,7 +225,7 @@ export default function AgentsPage() {
                         className="gap-2 h-8 text-xs text-destructive hover:bg-destructive hover:text-destructive-foreground"
                         onClick={() => handleDeleteAgent(agent.id)}
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-3.5 w-3.5" />
                         Delete
                       </Button>
                     </div>
@@ -240,9 +240,9 @@ export default function AgentsPage() {
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Edit Agent</DialogTitle>
+              <DialogTitle>Edit Character</DialogTitle>
               <DialogDescription>
-                Update your agent's configuration and settings
+                Update your character's configuration and settings
               </DialogDescription>
             </DialogHeader>
             {selectedAgent && (
@@ -442,7 +442,7 @@ You should:
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="name" className="flex items-center gap-1">
-              Agent Name
+              Character Name
               <span className="text-destructive">*</span>
             </Label>
             <Input
@@ -481,7 +481,7 @@ You should:
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             className="min-h-[80px]"
           />
-          <p className="text-xs text-muted-foreground">Brief description of the agent's purpose and capabilities</p>
+          <p className="text-xs text-muted-foreground">Brief description of the character's purpose and capabilities</p>
         </div>
 
         <div className="space-y-2">
@@ -1160,7 +1160,7 @@ You should:
           {(createAgent.isPending || updateAgent.isPending) && (
             <Loader2 className="h-4 w-4 animate-spin mr-2" />
           )}
-          {agent ? "Save Changes" : "Create Agent"}
+          {agent ? "Save Changes" : "Create Character"}
         </Button>
       </div>
     </Tabs>

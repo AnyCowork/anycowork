@@ -41,6 +41,7 @@ fn create_test_agent_db(pool: &DbPool, name: &str) -> Agent {
         execution_settings: None,
         scope_type: None,
         workspace_path: None,
+        avatar: None,
     };
 
     let mut conn = pool.get().expect("Failed to get DB connection");
@@ -113,7 +114,7 @@ mod agent_loop_tests {
         assert_eq!(agent_loop.agent_id, agent.id);
         assert_eq!(agent_loop.model, agent.ai_model);
         assert_eq!(agent_loop.history.len(), 0);
-        assert_eq!(agent_loop.tools.len(), 3); // Filesystem, Search, Bash
+        assert_eq!(agent_loop.tools.len(), 5); // Filesystem, Search, Bash, Transcribe, SendEmail
     }
 
     #[tokio::test]

@@ -58,6 +58,7 @@ mod daily_workflow_tests {
             execution_settings: None,
             scope_type: None,
             workspace_path: None,
+            avatar: None,
         };
 
         let mut conn = pool.get().expect("Failed to get connection");

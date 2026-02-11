@@ -1,7 +1,11 @@
 pub mod bash;
+pub mod contacts;
+pub mod email;
 pub mod filesystem;
+pub mod mail_reader;
 pub mod office;
 pub mod search;
+pub mod transcribe;
 
 #[cfg(test)]
 pub mod workflow_tests;
